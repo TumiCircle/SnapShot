@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline';">
+<title>PixelSnap</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+:root {
+  --bg-deep: #0a0818;
+  --bg-mid: rgba(29, 24, 64, 0.82);
+  --bg-panel: rgba(37, 29, 77, 0.88);
+  --bg-panel-2: rgba(44, 35, 88, 0.90);
+  --border-light: #8c82ff;
+  --border-dark: #050310;
+  --accent-mint: #7fffd4;
+  --accent-pink: #ff6eb4;
+  --accent-yellow: #ffee78;
+  --accent-red: #ff4d6d;
+  --text-main: #f0efff;
+  --text-dim: #9b94d4;
+  --text-muted: #6b6399;
+  --ui-opacity: 1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; image-rendering: pixelated; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg-deep);
+  font-family: 'VT323', monospace;
+  color: var(--text-main);
+  -webkit-font-smoothing: none; font-smooth: never;
+  user-select: none;
+  opacity: var(--ui-opacity);
+}
+
+body {
+  display: flex; flex-direction: column; position: relative;
+}
+
+.starfield {
+  position: fixed; inset: 0; overflow: hidden; pointer-events: none;
+  z-index: 1;
+}
+.star {
+  position: absolute; width: 2px; height: 2px; background: #fff;
+}
+.blink { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+
+/* Meteor shower */
+@keyframes meteorFall {
+  0% { transform: translate(0, 0) rotate(-45deg); opacity: 0; }
+  5% { opacity: 1; }
+  20% { opacity: 0; }
+  100% { transform: translate(-400px, 400px) rotate(-45deg); opacity: 0; }
+}
+.meteor {
+  position: absolute;
+  width: 120px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-mint), #fff);
+  box-shadow: 0 0 6px var(--accent-mint), 0 0 12px rgba(127,255,212,0.4);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.scanlines::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.55) 0px,
+    rgba(0,0,0,0.55) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  z-index: 999;
+}
+.scanlines::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+  z-index: 1000;
+}
+
+.title-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(58,45,122,0.92) 0%, rgba(37,29,77,0.94) 100%);
+  border-bottom: 4px solid var(--border-dark);
+  -webkit-app-region: drag; position: relative; z-index: 5; flex-shrink: 0;
+}
+.title-bar::after {
+  content: ''; position: absolute; left:0; right:0; top:0; height:2px; background: var(--border-light);
+}
+.title-bar .title-logo {
+  width: 20px; height: 20px;
+}
+.title-bar .controls { display: flex; gap:6px; -webkit-app-region: no-drag; }
+.tb-btn {
+  width: 20px; height: 20px; background: var(--bg-deep); border: none; cursor: pointer;
+  color: var(--text-main); font-family: 'Press Start 2P', monospace; font-size: 8px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: inset -2px -2px 0 var(--border-dark), inset 2px 2px 0 var(--border-light);
+}
+.tb-btn:hover { background: var(--accent-mint); color: var(--bg-deep); }
+.tb-btn.close:hover { background: var(--accent-red); color: #fff; }
+
+.content {
+  flex: 1; padding: 20px; overflow-y: auto; position: relative; z-index: 2;
+}
+
+.hero { text-align: center; padding: 14px 10px 18px; margin-bottom: 18px; position: relative; z-index:3; }
+.hero h1 {
+  font-family: 'Press Start 2P', monospace; font-size: 22px;
+  color: var(--accent-mint);
+  text-shadow: 3px 3px 0 var(--accent-pink), 6px 6px 0 var(--border-dark);
+  letter-spacing: 2px; margin-bottom: 8px;
+}
+.hero .sub { font-family: 'VT323', monospace; font-size: 18px; color: var(--text-dim); }
+.hero .camera-logo {
+  width: 56px; height: 56px; margin: 0 auto 6px; display: block;
+}
+
+.sparkle { display: inline-block; color: var(--accent-yellow); animation: sparkle 1.2s steps(2) infinite; }
+@keyframes sparkle { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.4;transform:scale(0.8);} }
+
+.section { margin-bottom: 16px; position: relative; z-index: 3; }
+.pixel-label {
+  font-family: 'Press Start 2P', monospace; font-size: 9px;
+  color: var(--accent-mint); text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 8px; display: block;
+}
+
+.mode-block {
+  background: var(--bg-mid); padding: 12px 14px; margin-bottom: 10px;
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+  position: relative;
+}
+.mode-block.active {
+  background: var(--bg-panel);
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light), 0 0 0 2px var(--accent-mint);
+}
+.mode-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; cursor: pointer; }
+.mode-radio {
+  width: 18px; height: 18px; background: var(--bg-deep); flex-shrink:0;
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+  display: flex; align-items: center; justify-content: center;
+}
+.mode-block.active .mode-radio::after {
+  content: ''; width: 10px; height: 10px; background: var(--accent-pink);
+  box-shadow: inset 2px 2px 0 #b83d7a, inset -2px -2px 0 #ff9dcf;
+}
+.mode-name {
+  font-family: 'Press Start 2P', monospace; font-size: 10px;
+  color: var(--accent-mint); letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--border-dark); flex: 1;
+}
+.mode-tag {
+  font-family: 'Press Start 2P', monospace; font-size: 7px; padding: 3px 6px;
+  background: var(--accent-yellow); color: var(--bg-deep);
+  box-shadow: 0 -2px 0 #fff6b0, 0 2px 0 #c5a820, -2px 0 0 #fff6b0, 2px 0 0 #c5a820;
+}
+.mode-body { padding-left: 28px; }
+.mode-block:not(.active) .mode-body { opacity: 0.45; pointer-events: none; }
+
+.row { display: flex; gap: 10px; align-items: center; }
+.row + .row { margin-top: 10px; }
+.grow { flex: 1; }
+
+.mode-sub-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.mode-sub-label {
+  font-family: 'VT323', monospace; font-size: 18px; min-width: 110px;
+  color: var(--accent-pink); flex-shrink: 0;
+}
+.mode-sub-label.yellow { color: var(--accent-yellow); }
+.mode-sub-label.dim { color: var(--text-muted); }
+
+.mode-num-input {
+  font-family: 'VT323', monospace; font-size: 20px; padding: 6px 10px; width: 80px;
+  background: var(--bg-deep); color: var(--accent-mint); border: none; outline: none;
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+  caret-color: var(--accent-mint);
+}
+.mode-num-input:focus {
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light), 0 0 0 2px var(--accent-mint);
+}
+.mode-unit { font-family: 'VT323', monospace; font-size: 18px; color: var(--text-dim); }
+
+.segmented { display: flex; gap: 0; }
+.segmented button {
+  flex: 1; font-family: 'Press Start 2P', monospace; font-size: 9px; padding: 10px 6px;
+  background: var(--bg-deep); color: var(--text-dim); border: none; cursor: pointer;
+  text-transform: uppercase;
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+}
+.segmented button.active {
+  background: var(--accent-pink); color: #1a0a15;
+  box-shadow: inset -2px -2px 0 #b83d7a, inset 2px 2px 0 #ff9dcf;
+}
+
+.locked-badge {
+  font-family: 'VT323', monospace; font-size: 16px; padding: 4px 10px;
+  background: var(--bg-deep); color: var(--text-muted);
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--bg-panel-2);
+}
+
+.pixel-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Press Start 2P', monospace; font-size: 10px;
+  padding: 12px 16px; color: var(--bg-deep); background: var(--accent-mint);
+  border: none; cursor: pointer; letter-spacing: 1px; text-transform: uppercase;
+  box-shadow: 0 -4px 0 0 #b8ffe8, 0 4px 0 0 #2da88a, -4px 0 0 0 #b8ffe8, 4px 0 0 0 #2da88a;
+  transition: transform 0.05s;
+}
+.pixel-btn:hover { background: #9effe0; }
+.pixel-btn:active {
+  transform: translate(2px,2px);
+  box-shadow: 0 -4px 0 0 #2da88a, 0 4px 0 0 #b8ffe8, -4px 0 0 0 #2da88a, 4px 0 0 0 #b8ffe8;
+}
+.pixel-btn.pink {
+  background: var(--accent-pink); color: #1a0a15;
+  box-shadow: 0 -4px 0 0 #ff9dcf, 0 4px 0 0 #b83d7a, -4px 0 0 0 #ff9dcf, 4px 0 0 0 #b83d7a;
+}
+.pixel-btn.pink:hover { background: #ff8ac5; }
+.pixel-btn.red {
+  background: var(--accent-red); color: #fff;
+  box-shadow: 0 -4px 0 0 #ff8fa5, 0 4px 0 0 #8a1a2f, -4px 0 0 0 #ff8fa5, 4px 0 0 0 #8a1a2f;
+}
+.pixel-btn.red:hover { background: #ff6b85; }
+.pixel-btn.ghost {
+  background: var(--bg-panel-2); color: var(--text-main);
+  box-shadow: 0 -4px 0 0 var(--border-light), 0 4px 0 0 var(--border-dark), -4px 0 0 0 var(--border-light), 4px 0 0 0 var(--border-dark);
+}
+.pixel-btn.ghost:hover { background: var(--border-light); color: var(--bg-deep); }
+.pixel-btn.small {
+  font-size: 8px; padding: 8px 10px;
+}
+
+.pixel-input {
+  font-family: 'VT323', monospace; font-size: 20px; padding: 8px 12px;
+  background: var(--bg-deep); color: var(--accent-mint); border: none; outline: none; width: 100%;
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+  caret-color: var(--accent-mint);
+}
+.pixel-input:focus { background: #050310; }
+.pixel-input[readonly] { cursor: pointer; }
+
+.pixel-check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: 'VT323', monospace; font-size: 20px; }
+.pixel-check .box {
+  width: 20px; height: 20px; background: var(--bg-deep); flex-shrink: 0;
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+  display: flex; align-items: center; justify-content: center;
+}
+.pixel-check input { display: none; }
+.pixel-check input:checked + .box::after {
+  content: ''; width: 12px; height: 12px; background: var(--accent-mint);
+  box-shadow: inset 2px 2px 0 #b8ffe8, inset -2px -2px 0 #2da88a;
+}
+
+.hotkey-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.hotkey-row .hk-label {
+  font-family: 'Press Start 2P', monospace; font-size: 7px; color: var(--accent-pink);
+  min-width: 70px; flex-shrink: 0; text-transform: uppercase;
+}
+.hotkey-row .hk-input { flex: 1; }
+.hotkey-row.recording .pixel-input { background: #2a0a15; color: var(--accent-pink); }
+
+.kbd {
+  display: inline-block; font-family: 'Press Start 2P', monospace; font-size: 8px;
+  padding: 4px 6px; background: var(--bg-deep); color: var(--accent-yellow);
+  box-shadow: inset -2px -2px 0 var(--border-dark), inset 2px 2px 0 var(--border-light); margin: 0 2px;
+}
+
+.toast-setting, .quality-inline {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  font-family: 'VT323', monospace; font-size: 18px; color: var(--text-dim); flex: 1
+}
+.toast-setting input[type=range] { flex: 1; accent-color: var(--accent-mint); }
+.toast-setting .val, .quality-inline .val {
+  font-family: 'Press Start 2P', monospace; font-size: 9px; color: var(--accent-yellow); min-width: 40px; text-align: right;
+}
+
+.quality-inline input[type=range] { flex: 1; accent-color: var(--accent-mint); }
+
+.status-dot {
+  display: inline-block; width: 10px; height: 10px; background: var(--accent-mint);
+  box-shadow: inset -2px -2px 0 #2da88a, inset 2px 2px 0 #b8ffe8;
+  margin-right: 6px; vertical-align: middle;
+}
+.status-dot.rec {
+  background: var(--accent-red); animation: blink 0.8s steps(1) infinite;
+  box-shadow: inset -2px -2px 0 #8a1a2f, inset 2px 2px 0 #ff8fa5;
+}
+
+.status-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 20px; background: var(--bg-panel-2);
+  border-top: 2px solid var(--border-dark);
+  font-family: 'VT323', monospace; font-size: 16px; color: var(--text-dim);
+  flex-shrink: 0; position: relative; z-index: 5;
+}
+
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-light); }
+
+/* Compact responsive */
+@media (max-height: 700px) {
+  .content { padding: 12px 16px; }
+  .hero { padding: 6px 6px 10px; margin-bottom: 10px; }
+  .hero h1 { font-size: 18px; }
+  .hero .camera-logo { width: 44px; height: 44px; }
+  .section { margin-bottom: 10px; }
+  .mode-block { padding: 10px; margin-bottom: 8px; }
+}
+</style>
+</head>
+<body class="scanlines">
+
+<div class="starfield" id="starfield"></div>
+
+<div class="title-bar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <!-- Mini camera logo in title bar -->
+    <svg class="title-logo" viewBox="0 0 16 16" shape-rendering="crispEdges">
+      <rect x="1" y="5" width="12" height="9" fill="#7fffd4"/>
+      <rect x="1" y="5" width="12" height="1" fill="#b8ffe8"/>
+      <rect x="1" y="13" width="12" height="1" fill="#2da88a"/>
+      <rect x="1" y="6" width="1" height="7" fill="#b8ffe8"/>
+      <rect x="12" y="6" width="1" height="7" fill="#2da88a"/>
+      <rect x="13" y="6" width="2" height="4" fill="#7fffd4"/>
+      <rect x="13" y="6" width="1" height="1" fill="#b8ffe8"/>
+      <rect x="14" y="9" width="1" height="1" fill="#2da88a"/>
+      <rect x="4" y="3" width="5" height="2" fill="#7fffd4"/>
+      <rect x="4" y="3" width="1" height="1" fill="#b8ffe8"/>
+      <rect x="8" y="4" width="1" height="1" fill="#2da88a"/>
+      <rect x="5" y="8" width="4" height="4" fill="#ff6eb4"/>
+      <rect x="5" y="8" width="4" height="1" fill="#ff9dcf"/>
+      <rect x="5" y="11" width="4" height="1" fill="#b83d7a"/>
+      <rect x="5" y="9" width="1" height="2" fill="#ff9dcf"/>
+      <rect x="8" y="9" width="1" height="2" fill="#b83d7a"/>
+      <rect x="6" y="9" width="2" height="2" fill="#ffee78"/>
+      <rect x="11" y="7" width="1" height="1" fill="#ff4d6d"/>
+    </svg>
+    <span style="color:var(--accent-mint);font-family:'Press Start 2P',monospace;font-size:10px;">▣ PIXELSNAP</span>
+    <span style="color:var(--text-dim);font-family:'VT323',monospace;font-size:16px;">// control panel</span>
+  </div>
+  <div class="controls">
+    <button class="tb-btn" id="btn-min" title="Minimize">_</button>
+    <button class="tb-btn close" id="btn-close" title="Close">X</button>
+  </div>
+</div>
+
+<div class="content">
+  <div class="hero">
+    <!-- Pixel art camera logo -->
+    <svg class="camera-logo" viewBox="0 0 32 32" shape-rendering="crispEdges">
+      <!-- top viewfinder bump -->
+      <rect x="10" y="4" width="10" height="3" fill="#7fffd4"/>
+      <rect x="10" y="4" width="10" height="1" fill="#b8ffe8"/>
+      <rect x="10" y="6" width="1" height="1" fill="#b8ffe8"/>
+      <rect x="19" y="6" width="1" height="1" fill="#2da88a"/>
+      <!-- main body -->
+      <rect x="2" y="7" width="28" height="20" fill="#7fffd4"/>
+      <rect x="2" y="7" width="28" height="1" fill="#b8ffe8"/>
+      <rect x="2" y="26" width="28" height="1" fill="#2da88a"/>
+      <rect x="2" y="8" width="1" height="18" fill="#b8ffe8"/>
+      <rect x="29" y="8" width="1" height="18" fill="#2da88a"/>
+      <!-- right grip -->
+      <rect x="27" y="10" width="3" height="8" fill="#7fffd4"/>
+      <rect x="27" y="10" width="1" height="1" fill="#b8ffe8"/>
+      <rect x="29" y="17" width="1" height="1" fill="#2da88a"/>
+      <!-- lens outer ring (pink) -->
+      <rect x="9" y="11" width="14" height="12" fill="#ff6eb4"/>
+      <rect x="9" y="11" width="14" height="1" fill="#ff9dcf"/>
+      <rect x="9" y="22" width="14" height="1" fill="#b83d7a"/>
+      <rect x="9" y="12" width="1" height="10" fill="#ff9dcf"/>
+      <rect x="22" y="12" width="1" height="10" fill="#b83d7a"/>
+      <!-- lens inner (yellow) -->
+      <rect x="12" y="14" width="8" height="6" fill="#ffee78"/>
+      <rect x="12" y="14" width="8" height="1" fill="#fff6b0"/>
+      <rect x="12" y="19" width="8" height="1" fill="#c5a820"/>
+      <rect x="12" y="15" width="1" height="4" fill="#fff6b0"/>
+      <rect x="19" y="15" width="1" height="4" fill="#c5a820"/>
+      <!-- lens center highlight -->
+      <rect x="14" y="15" width="3" height="3" fill="#fff"/>
+      <!-- shutter button (red) -->
+      <rect x="24" y="12" width="2" height="2" fill="#ff4d6d"/>
+      <rect x="24" y="12" width="1" height="1" fill="#ff8fa5"/>
+      <!-- feet -->
+      <rect x="5" y="27" width="4" height="2" fill="#2da88a"/>
+      <rect x="23" y="27" width="4" height="2" fill="#2da88a"/>
+    </svg>
+    <h1>PIXEL SNAP</h1>
+    <div class="sub">> CATCH THE EPIC MOMENT <span class="sparkle">✦</span> SAVE IT FOREVER</div>
+  </div>
+
+  <div class="section">
+    <div style="margin-top:10px;">
+      <button class="pixel-btn pink" id="btn-snap-test" style="width:100%;padding:14px;font-size:12px;">SNAP!</button>
+    </div>
+    <div style="margin-top:6px;font-family:'VT323',monospace;font-size:16px;color:var(--text-muted);text-align:center;">
+      PRESS HOTKEY ANYWHERE TO CAPTURE
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="pixel-label">▸ CAPTURE MODE</label>
+
+    <div class="mode-block active" data-mode="image">
+      <div class="mode-head">
+        <div class="mode-radio"></div>
+        <div class="mode-name">IMAGE SNAPSHOT</div>
+        <div class="mode-tag" id="image-tag">PNG</div>
+      </div>
+      <div class="mode-body">
+        <div class="row" style="margin-top:0;">
+          <div class="segmented" id="fmt-picker" style="flex:1;">
+            <button data-fmt="png" class="active">PNG</button>
+            <button data-fmt="jpg">JPG</button>
+          </div>
+        </div>
+        <div class="mode-sub-row" id="jpg-quality-row">
+          <span class="mode-sub-label yellow">JPG QUALITY:</span>
+          <div class="quality-inline">
+            <input type="range" id="quality" min="40" max="100" value="90">
+            <span class="qv" id="qv">90</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-block" data-mode="video">
+      <div class="mode-head">
+        <div class="mode-radio"></div>
+        <div class="mode-name">VIDEO SNAPSHOT</div>
+        <div class="mode-tag">MP4</div>
+      </div>
+      <div class="mode-body">
+        <div class="mode-sub-row" style="margin-top:0;">
+          <span class="mode-sub-label yellow">DURATION:</span>
+          <input type="number" class="mode-num-input" id="vid-dur" value="3" min="1" max="999">
+          <span class="mode-unit">SEC</span>
+        </div>
+        <div class="mode-sub-row">
+          <span class="mode-sub-label dim">FRAMERATE:</span>
+          <input type="number" class="mode-num-input" id="vid-fps" value="30" min="10" max="60">
+          <span class="mode-unit">FPS</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-block" data-mode="motion">
+      <div class="mode-head">
+        <div class="mode-radio"></div>
+        <div class="mode-name">MOTION PHOTO</div>
+        <div class="mode-tag">GIF</div>
+      </div>
+      <div class="mode-body">
+        <div class="mode-sub-row" style="margin-top:0;">
+          <span class="mode-sub-label yellow">DURATION:</span>
+          <input type="number" class="mode-num-input" id="mot-dur" value="3" min="1" max="30">
+          <span class="mode-unit">SEC</span>
+        </div>
+        <div class="mode-sub-row">
+          <span class="mode-sub-label dim">FRAMERATE:</span>
+          <input type="number" class="mode-num-input" id="mot-fps" value="15" min="5" max="20">
+          <span class="mode-unit">FPS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="pixel-label">▸ FILE & SAVE</label>
+    <div class="row">
+      <input class="pixel-input grow" id="save-dir" type="text" spellcheck="false">
+      <button class="pixel-btn" id="btn-browse" style="padding:10px 12px;">BROWSE</button>
+      <button class="pixel-btn ghost" id="btn-open" style="padding:10px 12px;">OPEN</button>
+    </div>
+    <div class="toast-setting">
+      <span style="min-width:140px;">FILENAME PREFIX:</span>
+      <input class="pixel-input grow" id="filename-prefix" type="text" spellcheck="false" value="snap" style="font-size:16px;padding:6px 10px;">
+    </div>
+    <div class="toast-setting">
+      <span style="min-width:140px;">THUMBNAIL SIZE:</span>
+      <input type="range" id="thumb-size" min="60" max="256" step="8" value="128">
+      <span class="val" id="thumb-size-label">128px</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="pixel-label">▸ HOTKEYS</label>
+    <div class="row hotkey-row" id="hk-image-wrap">
+      <span class="hk-label">IMAGE:</span>
+      <input class="pixel-input hk-input" id="hotkey-image" type="text" readonly placeholder="Click to record...">
+    </div>
+    <div class="row hotkey-row" id="hk-video-wrap">
+      <span class="hk-label">VIDEO:</span>
+      <input class="pixel-input hk-input" id="hotkey-video" type="text" readonly placeholder="Click to record...">
+    </div>
+    <div class="row hotkey-row" id="hk-motion-wrap">
+      <span class="hk-label">MOTION:</span>
+      <input class="pixel-input hk-input" id="hotkey-motion" type="text" readonly placeholder="Click to record...">
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="pixel-label">▸ RECORDING</label>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="record-audio" checked>
+        <span class="box"></span>
+        <span>RECORD SYSTEM AUDIO</span>
+      </label>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <span class="mode-sub-label" style="min-width:140px;">REC POSITION:</span>
+      <div class="segmented grow" id="rec-pos-picker">
+        <button data-pos="top-left" class="active">TL</button>
+        <button data-pos="top-right">TR</button>
+        <button data-pos="bottom-left">BL</button>
+        <button data-pos="bottom-right">BR</button>
+      </div>
+    </div>
+    <div class="toast-setting">
+      <span style="min-width:140px;">TOAST DURATION:</span>
+      <input type="range" id="toast-dur" min="1000" max="6000" step="500" value="2500">
+      <span class="val" id="toast-dur-label">2.5s</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="pixel-label">▸ BEHAVIOR</label>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="sound-on" checked>
+        <span class="box"></span>
+        <span>ENABLE CAPTURE SOUND</span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="show-toast" checked>
+        <span class="box"></span>
+        <span>SHOW TOAST NOTIFICATION</span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="auto-open-folder" checked>
+        <span class="box"></span>
+        <span>AUTO-OPEN FOLDER AFTER CAPTURE</span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="start-minimized">
+        <span class="box"></span>
+        <span>START MINIMIZED TO TRAY</span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="hide-on-capture" checked>
+        <span class="box"></span>
+        <span>HIDE ON CAPTURE</span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="save-thumbnail">
+        <span class="box"></span>
+        <span>SAVE THUMBNAILS LOCALLY</span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="pixel-check grow">
+        <input type="checkbox" id="close-to-tray" checked>
+        <span class="box"></span>
+        <span>CLOSE TO TRAY (DON'T EXIT)</span>
+      </label>
+    </div>
+    <div class="toast-setting">
+      <span style="min-width:140px;">UI OPACITY:</span>
+      <input type="range" id="ui-opacity" min="50" max="100" step="5" value="100">
+      <span class="val" id="ui-opacity-label">100%</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="pixel-btn red" id="btn-reset" style="width:100%;">RESET ALL SETTINGS</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span><span class="status-dot" id="sb-dot"></span><span id="sb-text">SYSTEM ONLINE</span></span>
+  <span>v1.0 <span class="sparkle">✦</span> PIXELSNAP</span>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" alt="PixelSnap Logo" width="128" height="128">
+</p>
+
+<h1 align="center">📸 PixelSnap</h1>
+
+<p align="center">
+  A retro CRT-style screenshot, video recording, and GIF capture tool for Windows.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-10%2F11-blue?style=flat-square&logo=windows" alt="Windows">
+  <img src="https://img.shields.io/badge/Tauri-2.0-24c8db?style=flat-square&logo=tauri" alt="Tauri">
+  <img src="https://img.shields.io/badge/Rust-1.85+-dea584?style=flat-square&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT">
+</p>
+
+---
+
+## ✨ Features
+
+- 🖼️ **Screenshot** - Capture windows or full screen in PNG/JPG format with customizable quality
+- 🎬 **Video Recording** - H.264 hardware-accelerated MP4 recording with system audio
+- 🎞️ **Motion Photo (GIF)** - Capture animated GIFs with configurable duration and FPS
+- ⌨️ **Global Hotkeys** - Independent hotkeys for each capture mode (customizable)
+- 🎨 **CRT Retro UI** - Pixel art aesthetic with dynamic starry sky background and scanline effects
+- 📁 **Custom Save Location** - Choose your output folder with browse dialog
+- 🪟 **System Tray** - Minimize to tray, quick capture from tray menu
+- 🔴 **REC Indicator** - Flashing corner indicator during recording (excluded from capture output)
+- 🖼️ **Thumbnails** - Optional thumbnail generation with customizable size
+- 🔔 **Toast Notifications** - Non-intrusive completion notifications
+- 🎵 **Sound Effects** - Optional capture confirmation sounds
+- 🔧 **Highly Configurable** - Extensive settings for format, quality, duration, FPS, opacity, and more
+
+## 🖥️ Screenshots
+
+<p align="center">
+  <i>PixelSnap features a retro CRT pixel-art interface with mint/pink/yellow accent colors on a starry black background.</i>
+</p>
+
+## 🚀 Quick Start
+
+### Download Pre-built Binary
+
+Download the latest `pixelsnap.exe` from the [Releases](../../releases) page.
+
+### Build from Source
+
+**Prerequisites:**
+- Windows 10/11
+- [Rust](https://www.rust-lang.org/tools/install) (1.85+)
+- [Node.js](https://nodejs.org/) (for development, not required for release builds)
+- MSVC Build Tools (via Visual Studio Installer)
+- Windows 10/11 SDK (for Windows Graphics Capture API)
+
+```powershell
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/PixelSnap.git
+cd PixelSnap
+
+# Build release binary
+cd src-tauri
+cargo build --release
+
+# The executable will be at:
+# src-tauri\target\release\pixelsnap.exe
+```
+
+## ⌨️ Default Hotkeys
+
+| Mode | Default Hotkey |
+|------|---------------|
+| Screenshot | `Ctrl+Shift+S` |
+| Video Record | `Ctrl+Shift+V` |
+| Motion Photo (GIF) | `Ctrl+Shift+M` |
+
+Hotkeys can be customized in Settings.
+
+## 📁 Output Formats
+
+- **Image**: PNG (lossless) or JPG (adjustable quality 1-100)
+- **Video**: MP4 (H.264 video + AAC audio, hardware-accelerated via Windows Media Foundation)
+- **Motion Photo**: GIF (animated)
+
+## ⚙️ Configuration
+
+All settings are accessible via the UI and saved to:
+```
+%APPDATA%\PixelSnap\config.json
+```
+
+Key settings include:
+- Save directory path
+- Filename prefix
+- Image format and quality
+- Video duration and FPS
+- GIF duration and FPS
+- REC indicator position (4 corners)
+- UI opacity (50%-100%)
+- Startup behavior (minimize to tray)
+- Auto-open folder after capture
+- Toast notifications toggle
+- System audio recording toggle
+
+## 🏗️ Tech Stack
+
+- **[Tauri 2](https://tauri.app/)** - Desktop application framework
+- **[Rust](https://www.rust-lang.org/)** - Backend capture, encoding, and system integration
+- **[Windows Graphics Capture API](https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/screen-capture)** - High-performance screen/window capture
+- **[Windows Media Foundation](https://learn.microsoft.com/en-us/windows/win32/medfound/microsoft-media-foundation-sdk)** - H.264 hardware video encoding
+- **WASAPI** - System audio capture
+- **HTML/CSS/JS** - Frontend UI (zero dependencies, vanilla JS)
+- **[image](https://crates.io/crates/image)** - Image encoding (PNG/JPG)
+- **[windows-rs](https://github.com/microsoft/windows-rs)** - Windows API bindings
+
+## 📁 Project Structure
+
+```
+PixelSnap/
+├── dist/                      # Frontend static files (HTML/CSS/JS)
+│   ├── index.html             # Main settings UI
+│   ├── app.js                 # Frontend application logic
+│   ├── rec.html               # REC indicator window
+│   └── toast.html             # Toast notification popup
+├── src-tauri/
+│   ├── src/
+│   │   ├── main.rs            # App entry, tray, window management, commands
+│   │   ├── capture.rs         # Core capture logic (image/video/GIF)
+│   │   ├── config.rs          # Configuration management
+│   │   ├── audio.rs           # Audio capture (WASAPI)
+│   │   └── toast.rs           # Toast window helpers
+│   ├── icons/                 # Application icons (generated by build.rs)
+│   ├── Cargo.toml             # Rust dependencies
+│   ├── build.rs               # Build script (icon generation)
+│   └── tauri.conf.json        # Tauri configuration
+├── .gitignore
+├── LICENSE
+└── README.md
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## ⚠️ Windows-Only Note
+
+This application uses Windows-specific APIs (Windows Graphics Capture, Media Foundation, WASAPI) and is designed for Windows 10 version 1903+ and Windows 11. Cross-platform support is not planned.
+
+## 🙏 Acknowledgments
+
+- [Tauri](https://tauri.app/) for the excellent desktop framework
+- [windows-rs](https://github.com/microsoft/windows-rs) for Rust Windows bindings
+- [windows-capture](https://github.com/phantom-software-ak/windows-capture) for WGC bindings

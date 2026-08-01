@@ -1,0 +1,34 @@
+# Rust build artifacts
+src-tauri/target/
+
+# Tauri auto-generated files
+src-tauri/gen/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+*.lnk
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node.js
+node_modules/
+
+# Tauri bundle outputs
+src-tauri/target/
+src-tauri/WixTools/
+
+# Local config (contains user-specific paths, should not be committed)
+# Note: AppConfig is stored in %APPDATA% at runtime, not in repo
