@@ -5,7 +5,7 @@
 <h1 align="center">📸 PixelSnap</h1>
 
 <p align="center">
-  A retro CRT-style screenshot, video recording, and GIF capture tool for Windows.
+  复古CRT风格的 Windows 截图、录屏、GIF动图捕获工具
 </p>
 
 <p align="center">
@@ -17,147 +17,148 @@
 
 ---
 
-## ✨ Features
+## ✨ 功能特性
 
-- 🖼️ **Screenshot** - Capture windows or full screen in PNG/JPG format with customizable quality
-- 🎬 **Video Recording** - H.264 hardware-accelerated MP4 recording with system audio
-- 🎞️ **Motion Photo (GIF)** - Capture animated GIFs with configurable duration and FPS
-- ⌨️ **Global Hotkeys** - Independent hotkeys for each capture mode (customizable)
-- 🎨 **CRT Retro UI** - Pixel art aesthetic with dynamic starry sky background and scanline effects
-- 📁 **Custom Save Location** - Choose your output folder with browse dialog
-- 🪟 **System Tray** - Minimize to tray, quick capture from tray menu
-- 🔴 **REC Indicator** - Flashing corner indicator during recording (excluded from capture output)
-- 🖼️ **Thumbnails** - Optional thumbnail generation with customizable size
-- 🔔 **Toast Notifications** - Non-intrusive completion notifications
-- 🎵 **Sound Effects** - Optional capture confirmation sounds
-- 🔧 **Highly Configurable** - Extensive settings for format, quality, duration, FPS, opacity, and more
+- 🖼️ **截图** — 支持 PNG/JPG 格式，JPG 可自定义压缩质量
+- 🎬 **视频录制** — H.264 硬件加速 MP4 录制，支持系统音频捕获
+- 🎞️ **动图（GIF）** — 可配置时长和帧率的 GIF 动图捕获
+- ⌨️ **全局快捷键** — 三种模式独立快捷键，可自定义
+- 🎨 **CRT复古界面** — 像素美术风格，动态星空背景，扫描线效果
+- 📁 **自定义保存路径** — 通过浏览对话框选择输出文件夹
+- 🪟 **系统托盘** — 最小化到托盘，托盘菜单快速捕获
+- 🔴 **REC指示灯** — 录制时角落闪烁红点提示（不会被录进视频中）
+- 🖼️ **缩略图** — 可选生成缩略图，尺寸可调
+- 🔔 **Toast通知** — 非侵入式完成通知弹窗
+- 🎵 **音效** — 可选捕获完成提示音
+- 🔧 **高度可配置** — 格式、质量、时长、帧率、透明度等丰富设置
 
-## 🖥️ Screenshots
+## 🖥️ 界面预览
 
-<p align="center">
-  <i>PixelSnap features a retro CRT pixel-art interface with mint/pink/yellow accent colors on a starry black background.</i>
-</p>
+PixelSnap 采用复古CRT像素美术风格，薄荷绿/粉色/黄色配色，黑色星空动态背景，扫描线效果。
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### Download Pre-built Binary
+### 下载预编译版本
 
-Download the latest `pixelsnap.exe` from the [Releases](../../releases) page.
+从 [Releases](../../releases) 页面下载最新的 `pixelsnap.exe`。
 
-### Build from Source
+### 从源码编译
 
-**Prerequisites:**
+**前置要求：**
 - Windows 10/11
-- [Rust](https://www.rust-lang.org/tools/install) (1.85+)
-- [Node.js](https://nodejs.org/) (for development, not required for release builds)
-- MSVC Build Tools (via Visual Studio Installer)
-- Windows 10/11 SDK (for Windows Graphics Capture API)
+- [Rust](https://www.rust-lang.org/tools/install)（1.85+）
+- MSVC 编译工具（通过 Visual Studio Installer 安装）
+- Windows 10/11 SDK（用于 Windows Graphics Capture API）
+- [Node.js](https://nodejs.org/)（仅开发时需要，release构建不需要）
 
 ```powershell
-# Clone the repository
+# 克隆仓库
 git clone https://github.com/YOUR_USERNAME/PixelSnap.git
 cd PixelSnap
 
-# Build release binary
+# 构建release版本
 cd src-tauri
 cargo build --release
 
-# The executable will be at:
+# 生成的可执行文件路径：
 # src-tauri\target\release\pixelsnap.exe
 ```
 
-## ⌨️ Default Hotkeys
+## ⌨️ 默认快捷键
 
-| Mode | Default Hotkey |
-|------|---------------|
-| Screenshot | `Ctrl+Shift+S` |
-| Video Record | `Ctrl+Shift+V` |
-| Motion Photo (GIF) | `Ctrl+Shift+M` |
+| 模式 | 默认快捷键 |
+|------|-----------|
+| 截图 | `Ctrl+Shift+S` |
+| 视频录制 | `Ctrl+Shift+V` |
+| 动图（GIF） | `Ctrl+Shift+M` |
 
-Hotkeys can be customized in Settings.
+快捷键可在设置中自定义。
 
-## 📁 Output Formats
+## 📁 输出格式
 
-- **Image**: PNG (lossless) or JPG (adjustable quality 1-100)
-- **Video**: MP4 (H.264 video + AAC audio, hardware-accelerated via Windows Media Foundation)
-- **Motion Photo**: GIF (animated)
+- **图片**：PNG（无损）或 JPG（质量1-100可调）
+- **视频**：MP4（H.264视频 + AAC音频，通过 Windows Media Foundation 硬件加速编码）
+- **动图**：GIF（动画）
 
-## ⚙️ Configuration
+## ⚙️ 配置说明
 
-All settings are accessible via the UI and saved to:
+所有设置均可在UI中调整，配置文件保存于：
 ```
 %APPDATA%\PixelSnap\config.json
 ```
 
-Key settings include:
-- Save directory path
-- Filename prefix
-- Image format and quality
-- Video duration and FPS
-- GIF duration and FPS
-- REC indicator position (4 corners)
-- UI opacity (50%-100%)
-- Startup behavior (minimize to tray)
-- Auto-open folder after capture
-- Toast notifications toggle
-- System audio recording toggle
+主要设置项包括：
+- 保存目录路径
+- 文件名前缀
+- 图片格式与质量
+- 视频时长与帧率
+- GIF时长与帧率
+- REC指示灯位置（四个角落可选）
+- UI透明度（50%-100%）
+- 启动行为（最小化到托盘）
+- 捕获后自动打开文件夹
+- Toast通知开关
+- 系统音频录制开关
 
-## 🏗️ Tech Stack
+## 🏗️ 技术栈
 
-- **[Tauri 2](https://tauri.app/)** - Desktop application framework
-- **[Rust](https://www.rust-lang.org/)** - Backend capture, encoding, and system integration
-- **[Windows Graphics Capture API](https://learn.microsoft.com/en-us/windows/uwp/audio-video-camera/screen-capture)** - High-performance screen/window capture
-- **[Windows Media Foundation](https://learn.microsoft.com/en-us/windows/win32/medfound/microsoft-media-foundation-sdk)** - H.264 hardware video encoding
-- **WASAPI** - System audio capture
-- **HTML/CSS/JS** - Frontend UI (zero dependencies, vanilla JS)
-- **[image](https://crates.io/crates/image)** - Image encoding (PNG/JPG)
-- **[windows-rs](https://github.com/microsoft/windows-rs)** - Windows API bindings
+- **[Tauri 2](https://tauri.app/)** — 桌面应用框架
+- **[Rust](https://www.rust-lang.org/)** — 后端捕获、编码、系统集成
+- **[Windows Graphics Capture API](https://learn.microsoft.com/zh-cn/windows/uwp/audio-video-camera/screen-capture)** — 高性能屏幕/窗口捕获
+- **[Windows Media Foundation](https://learn.microsoft.com/zh-cn/windows/win32/medfound/microsoft-media-foundation-sdk)** — H.264硬件视频编码
+- **WASAPI** — 系统音频捕获
+- **HTML/CSS/JS** — 前端UI（零依赖，原生JS）
+- **[image](https://crates.io/crates/image)** — 图片编码（PNG/JPG/GIF/ICO）
+- **[windows-rs](https://github.com/microsoft/windows-rs)** — Windows API绑定
+- **[windows-capture](https://github.com/phantom-software-ak/windows-capture)** — WGC Rust绑定
 
-## 📁 Project Structure
+## 📁 项目结构
 
 ```
 PixelSnap/
-├── dist/                      # Frontend static files (HTML/CSS/JS)
-│   ├── index.html             # Main settings UI
-│   ├── app.js                 # Frontend application logic
-│   ├── rec.html               # REC indicator window
-│   └── toast.html             # Toast notification popup
+├── dist/                      # 前端静态文件（HTML/CSS/JS）
+│   ├── index.html             # 主设置界面
+│   ├── app.js                 # 前端逻辑
+│   ├── rec.html               # REC指示灯窗口
+│   └── toast.html             # Toast通知弹窗
 ├── src-tauri/
 │   ├── src/
-│   │   ├── main.rs            # App entry, tray, window management, commands
-│   │   ├── capture.rs         # Core capture logic (image/video/GIF)
-│   │   ├── config.rs          # Configuration management
-│   │   ├── audio.rs           # Audio capture (WASAPI)
-│   │   └── toast.rs           # Toast window helpers
-│   ├── icons/                 # Application icons (generated by build.rs)
-│   ├── Cargo.toml             # Rust dependencies
-│   ├── build.rs               # Build script (icon generation)
-│   └── tauri.conf.json        # Tauri configuration
-├── .gitignore
-├── LICENSE
-└── README.md
+│   │   ├── main.rs            # 应用入口、托盘、窗口管理、IPC命令
+│   │   ├── capture.rs         # 核心捕获逻辑（图片/视频/GIF）
+│   │   ├── config.rs          # 配置管理
+│   │   ├── audio.rs           # 音频捕获（WASAPI）
+│   │   └── toast.rs           # Toast窗口辅助
+│   ├── icons/                 # 应用图标（由build.rs构建时自动生成）
+│   ├── capabilities/          # Tauri权限配置
+│   ├── Cargo.toml             # Rust依赖配置
+│   ├── Cargo.lock             # Rust依赖锁定文件
+│   ├── build.rs               # 构建脚本（图标自动生成）
+│   └── tauri.conf.json        # Tauri应用配置
+├── .gitignore                 # Git忽略规则
+├── LICENSE                    # MIT开源协议
+└── README.md                  # 项目说明
 ```
 
-## 🤝 Contributing
+## 🤝 参与贡献
 
-Contributions are welcome! Feel free to:
+欢迎贡献代码！你可以：
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork 本仓库
+2. 创建特性分支（`git checkout -b feature/amazing-feature`）
+3. 提交更改（`git commit -m 'Add some amazing feature'`）
+4. 推送到分支（`git push origin feature/amazing-feature`）
+5. 提交 Pull Request
 
-## 📜 License
+## 📜 开源协议
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目基于 MIT 协议开源 — 详见 [LICENSE](LICENSE) 文件。
 
-## ⚠️ Windows-Only Note
+## ⚠️ 仅支持Windows
 
-This application uses Windows-specific APIs (Windows Graphics Capture, Media Foundation, WASAPI) and is designed for Windows 10 version 1903+ and Windows 11. Cross-platform support is not planned.
+本应用使用 Windows 特有API（Windows Graphics Capture、Media Foundation、WASAPI），专为 Windows 10 1903+ 和 Windows 11 设计。暂无跨平台支持计划。
 
-## 🙏 Acknowledgments
+## 🙏 致谢
 
-- [Tauri](https://tauri.app/) for the excellent desktop framework
-- [windows-rs](https://github.com/microsoft/windows-rs) for Rust Windows bindings
-- [windows-capture](https://github.com/phantom-software-ak/windows-capture) for WGC bindings
+- [Tauri](https://tauri.app/) — 优秀的桌面应用框架
+- [windows-rs](https://github.com/microsoft/windows-rs) — 微软官方Rust Windows绑定
+- [windows-capture](https://github.com/phantom-software-ak/windows-capture) — WGC Rust绑定库
