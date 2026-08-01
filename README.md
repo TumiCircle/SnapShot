@@ -5,7 +5,8 @@
 <h1 align="center">PixelSnap · 像素快拍</h1>
 
 <p align="center">
-  像素CRT风格的 Windows 截图、录屏、GIF动图捕获工具
+  像素CRT风格的 Windows 截图、录屏、GIF动图捕获工具<br>
+  （个人独立开发作品）
 </p>
 
 <p align="center">
