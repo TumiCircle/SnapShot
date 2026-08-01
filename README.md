@@ -2,10 +2,10 @@
   <img src="src-tauri/icons/128x128.png" alt="PixelSnap Logo" width="128" height="128">
 </p>
 
-<h1 align="center">📸 PixelSnap</h1>
+<h1 align="center">PixelSnap · 像素快拍</h1>
 
 <p align="center">
-  复古CRT风格的 Windows 截图、录屏、GIF动图捕获工具
+  像素CRT风格的 Windows 截图、录屏、GIF动图捕获工具
 </p>
 
 <p align="center">
@@ -30,17 +30,22 @@
 - 🖼️ **缩略图** — 可选生成缩略图，尺寸可调
 - 🔔 **Toast通知** — 非侵入式完成通知弹窗
 - 🎵 **音效** — 可选捕获完成提示音
-- 🔧 **高度可配置** — 格式、质量、时长、帧率、透明度等丰富设置
+- 🔧 **高度可配置** — 格式、质量、时长、帧率、透明度等丰富设置  
+  <br>
+> *不仅支持三种格式，还有如此别具一格的界面？！爱了爱了*
 
 ## 🖥️ 界面预览
 
-PixelSnap 采用复古CRT像素美术风格，薄荷绿/粉色/黄色配色，黑色星空动态背景，扫描线效果。
+**像素快拍（PixelSnap）** 采用复古CRT像素美术风格，薄荷绿/粉色/黄色配色，黑色星空动态背景，扫描线效果。  
+
+<img src="images/UI.png" alt="UI介绍" width="600">
+
 
 ## 🚀 快速开始
 
 ### 下载预编译版本
 
-从 [Releases](../../releases) 页面下载最新的 `pixelsnap.exe`。
+从 [Releases](../../releases) 页面下载最新的 `PixelSnap.exe`。
 
 ### 从源码编译
 
@@ -76,9 +81,9 @@ cargo build --release
 
 ## 📁 输出格式
 
-- **图片**：PNG（无损）或 JPG（质量1-100可调）
-- **视频**：MP4（H.264视频 + AAC音频，通过 Windows Media Foundation 硬件加速编码）
-- **动图**：GIF（动画）
+- **图片**：`PNG`（无损）+ `JPG`（质量1-100可调）
+- **视频**：`MP4`（H.264视频 + AAC音频，通过 Windows Media Foundation 硬件加速编码）
+- **动图**：`GIF`（动画）
 
 ## ⚙️ 配置说明
 
@@ -87,7 +92,7 @@ cargo build --release
 %APPDATA%\PixelSnap\config.json
 ```
 
-主要设置项包括：
+**主要设置项包括**：
 - 保存目录路径
 - 文件名前缀
 - 图片格式与质量
@@ -159,6 +164,7 @@ PixelSnap/
 
 ## 🙏 致谢
 
+- [Trae](https://www.trae.ai/) — 本项目使用 Trae AI SOLO 辅助开发完成，AI 结对编程极大提升了开发效率
 - [Tauri](https://tauri.app/) — 优秀的桌面应用框架
 - [windows-rs](https://github.com/microsoft/windows-rs) — 微软官方Rust Windows绑定
 - [windows-capture](https://github.com/phantom-software-ak/windows-capture) — WGC Rust绑定库
