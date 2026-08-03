@@ -32,6 +32,7 @@ const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: GUID = GUID::from_values(
 pub struct AudioFormat {
     pub sample_rate: u32,
     pub channels: u16,
+    #[allow(dead_code)]
     pub bits_per_sample: u16,
 }
 

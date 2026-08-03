@@ -213,7 +213,7 @@ fn generate_icons() -> Result<(), Box<dyn std::error::Error>> {
     let ico_path = out_dir.join("icon.ico");
     let file = File::create(&ico_path)?;
     let writer = BufWriter::new(file);
-    let mut encoder = IcoEncoder::new(writer);
+    let encoder = IcoEncoder::new(writer);
 
     // Encode images at sizes: 16, 32, 48, 64, 128, 256
     let ico_sizes: Vec<(u32, u32)> = vec![

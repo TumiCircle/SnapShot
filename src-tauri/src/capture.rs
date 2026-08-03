@@ -480,9 +480,9 @@ struct VideoShared {
 fn spawn_video_encoding_thread(
     mut encoder: VideoEncoder,
     shared: Arc<VideoShared>,
-    audio_format: Option<crate::audio::AudioFormat>,
+    _audio_format: Option<crate::audio::AudioFormat>,
     record_audio: bool,
-    audio_bitrate: u32,
+    _audio_bitrate: u32,
     fps: u32,
     duration_secs: u64,
     thumb_path: PathBuf,
@@ -506,21 +506,19 @@ fn spawn_video_encoding_thread(
         eprintln!("[VIDEO] Encoding thread started at wall-clock, fps={}, dur={}s", fps, duration_secs);
 
         // Start audio capture
-        let mut audio_capture: Option<crate::audio::AudioCapture> = None;
-        let audio_rx: Option<crossbeam_channel::Receiver<Vec<u8>>> = if record_audio {
+        let (audio_capture, audio_rx) = if record_audio {
             match crate::audio::AudioCapture::start() {
                 Ok((cap, rx)) => {
                     eprintln!("[AUDIO] Capture started");
-                    audio_capture = Some(cap);
-                    Some(rx)
+                    (Some(cap), Some(rx))
                 }
                 Err(e) => {
                     eprintln!("[AUDIO] Failed to start: {}", e);
-                    None
+                    (None, None)
                 }
             }
         } else {
-            None
+            (None, None)
         };
 
         let mut audio_buf: Vec<u8> = Vec::with_capacity(AUDIO_BUF_CAPACITY);
@@ -582,8 +580,8 @@ fn spawn_video_encoding_thread(
             audio_buf.clear();
         }
 
-        // Stop audio capture
-        audio_capture = None;
+        // Stop audio capture (drop guard, which stops the capture thread)
+        drop(audio_capture);
 
         // Finish encoding (blocks until file is finalized)
         eprintln!("[VIDEO] Finalizing encoder, sent {} frames (target ~{} frames)",
