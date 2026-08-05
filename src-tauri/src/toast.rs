@@ -37,16 +37,8 @@ fn build_status_toast(app: &AppHandle) -> Result<tauri::WebviewWindow, tauri::Er
     .resizable(false)
     .skip_taskbar(true)
     .focused(false)
-    .visible(false)
+    .visible(true)
     .build()
-}
-
-/// Pre-creates the reusable toast window at startup so the first hotkey press
-/// can show it immediately instead of waiting for a new WebView to spin up.
-pub fn init(app: &AppHandle) {
-    if app.get_webview_window(STATUS_TOAST_LABEL).is_none() {
-        let _ = build_status_toast(app);
-    }
 }
 
 fn get_status_toast(app: &AppHandle) -> Option<tauri::WebviewWindow> {
@@ -160,9 +152,14 @@ fn show_toast(
         ui_opacity,
     );
 
-    // Update the content before showing so the first visible frame is correct.
-    let _ = win.eval(&eval_script);
+    let win_for_eval = win.clone();
     let _ = win.show();
+    // Give a freshly created WebView time to finish loading before injecting
+    // the toast data. Reusing the window makes later toasts just as fast.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        let _ = win_for_eval.eval(&eval_script);
+    });
 
     let app_for_close = app.clone();
     let win_label = STATUS_TOAST_LABEL.to_string();

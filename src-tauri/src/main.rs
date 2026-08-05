@@ -152,6 +152,9 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
             toast::show_rec_toast(app, label);
         }
     }
+    if cfg.sound_enabled {
+        play_shutter_sound();
+    }
 
     if hide_window && cfg.hide_on_capture {
         if let Some(w) = app.get_webview_window("main") {
@@ -188,14 +191,11 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
                         let _ = w.emit("capture-completed", ());
                     }
 
-                    let (play_sound, do_toast, auto_open) = {
+                    let (do_toast, auto_open) = {
                         let c = cfg_arc.lock().unwrap();
-                        (c.sound_enabled, c.show_toast, c.auto_open_folder)
+                        (c.show_toast, c.auto_open_folder)
                     };
 
-                    if play_sound {
-                        play_shutter_sound();
-                    }
                     if do_toast {
                         let toast_dur = {
                             let c = cfg_arc.lock().unwrap();
@@ -480,7 +480,6 @@ fn main() {
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
-            toast::init(&app_handle);
             register_all_shortcuts(&app_handle);
 
             if start_min {
