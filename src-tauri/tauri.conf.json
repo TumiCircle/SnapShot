@@ -21,7 +21,7 @@
         "backgroundColor": "#0a0818",
         "url": "index.html",
         "label": "main",
-        "shadow": false
+        "shadow": true
       }
     ],
     "security": {

@@ -2150,10 +2150,6 @@ fn run_gif_collector(
                             if first_dims.is_none() {
                                 first_dims = Some(rgba.dimensions());
                             }
-                            if writer.is_none() && warmup.len() < GIF_WARMUP_FRAMES {
-                                append_gif_training_sample(&mut training, &rgba);
-                                warmup.push(rgba.clone());
-                            }
                             last_rgba = Some(rgba);
                         }
                         GifMsg::Stop => stop_flag.store(true, Ordering::SeqCst),
@@ -2169,7 +2165,18 @@ fn run_gif_collector(
                     continue;
                 }
 
-                if writer.is_none()
+                // Buffer at most one warm-up frame per paced tick. Draining the
+                // whole channel here would fill the warm-up buffer from a single
+                // tick and later write extra frames, making the GIF longer than
+                // the requested duration and its playback speed uneven.
+                if writer.is_none() && warmup.len() < GIF_WARMUP_FRAMES {
+                    if let Some(frame) = &last_rgba {
+                        append_gif_training_sample(&mut training, frame);
+                        warmup.push(frame.clone());
+                    }
+                }
+
+                let just_initialized = if writer.is_none()
                     && (warmup.len() >= GIF_WARMUP_FRAMES || stop_flag.load(Ordering::SeqCst))
                 {
                     if let Some(dims) = first_dims {
@@ -2185,13 +2192,21 @@ fn run_gif_collector(
                             break 'inner;
                         }
                     }
-                }
+                    true
+                } else {
+                    false
+                };
 
-                if let Some(w) = writer.as_mut() {
-                    if let Some(frame) = &last_rgba {
-                        if let Err(e) = w.write_frame(frame) {
-                            encode_error = Some(e);
-                            break 'inner;
+                // The initialization tick only writes the buffered warm-up
+                // frames; the current frame is written on the following ticks,
+                // so the total frame count stays exactly duration*fps.
+                if !just_initialized {
+                    if let Some(w) = writer.as_mut() {
+                        if let Some(frame) = &last_rgba {
+                            if let Err(e) = w.write_frame(frame) {
+                                encode_error = Some(e);
+                                break 'inner;
+                            }
                         }
                     }
                 }
@@ -2310,7 +2325,10 @@ mod tests {
             1,
         );
 
-        // Send 16 frames (more than the 8-frame warm-up) then stop.
+        // Send 16 frames (more than the 8-frame warm-up) immediately and let
+        // the collector run to the full 1s/15fps duration. The file must
+        // contain exactly 15 frames: one per paced tick, no extra warm-up
+        // overflow frames.
         for i in 0..16u8 {
             let mut img = RgbaImage::new(64, 64);
             for (x, y, p) in img.enumerate_pixels_mut() {
@@ -2318,7 +2336,6 @@ mod tests {
             }
             tx.send(GifMsg::NewFrame(img)).unwrap();
         }
-        tx.send(GifMsg::Stop).unwrap();
 
         let deadline = Instant::now() + Duration::from_secs(5);
         while !is_result_set(&result) {
@@ -2330,7 +2347,7 @@ mod tests {
         let res = result.lock().unwrap().take();
         match res {
             Some(CaptureResultInternal::Gif { frame_count, .. }) => {
-                assert!(frame_count >= 2, "expected at least 2 frames, got {}", frame_count);
+                assert_eq!(frame_count, 15, "expected exactly 15 frames, got {}", frame_count);
             }
             other => panic!("unexpected result: {:?}", other.map(|r| match r {
                 CaptureResultInternal::Gif { frame_count, .. } => format!("gif {}", frame_count),
@@ -2348,8 +2365,7 @@ mod tests {
         while decoder.read_next_frame().unwrap().is_some() {
             decoded += 1;
         }
-        assert!(decoded >= 2, "decoded frames: {}", decoded);
-        assert!(decoded <= 16, "decoded frames: {}", decoded);
+        assert_eq!(decoded, 15, "decoded frames: {}", decoded);
 
         let _ = fs::remove_file(&file_path);
         let _ = fs::remove_file(&thumb_path);
