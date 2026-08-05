@@ -21,19 +21,30 @@
   --text-main: #f0efff;
   --text-dim: #9b94d4;
   --text-muted: #6b6399;
-  --ui-opacity: 1;
+  /* 0-100%: JS sets these from settings */
+  --win-alpha: 1;
+  --ui-alpha-pct: 100%;
+  --ui-icon-alpha: 1;
+  /* UI surfaces that fade with UI transparency so the starfield shows through */
+  --deep-surface: color-mix(in srgb, #0a0818 var(--ui-alpha-pct), transparent);
+  --bg-mid-surface: color-mix(in srgb, rgb(29, 24, 64) var(--ui-alpha-pct), transparent);
+  --bg-panel-surface: color-mix(in srgb, rgb(37, 29, 77) var(--ui-alpha-pct), transparent);
+  --bg-panel2-surface: color-mix(in srgb, rgb(44, 35, 88) var(--ui-alpha-pct), transparent);
+  --mint-surface: color-mix(in srgb, var(--accent-mint) var(--ui-alpha-pct), transparent);
+  --pink-surface: color-mix(in srgb, var(--accent-pink) var(--ui-alpha-pct), transparent);
+  --yellow-surface: color-mix(in srgb, var(--accent-yellow) var(--ui-alpha-pct), transparent);
+  --red-surface: color-mix(in srgb, var(--accent-red) var(--ui-alpha-pct), transparent);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; image-rendering: pixelated; }
 
 html, body {
   width: 100%; height: 100%; overflow: hidden;
-  background: var(--bg-deep);
+  background: rgba(10, 8, 24, var(--win-alpha));
   font-family: 'VT323', monospace;
   color: var(--text-main);
   -webkit-font-smoothing: none; font-smooth: never;
   user-select: none;
-  opacity: var(--ui-opacity);
 }
 
 body {
@@ -44,8 +55,40 @@ body {
   position: fixed; inset: 0; overflow: hidden; pointer-events: none;
   z-index: 1;
 }
+.starfield::before,
+.starfield::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+}
+.starfield::before {
+  background:
+    radial-gradient(ellipse 60% 42% at 18% 22%, rgba(127,255,212,0.10), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 80% 18%, rgba(255,110,180,0.10), transparent 70%),
+    radial-gradient(ellipse 70% 50% at 55% 88%, rgba(255,238,120,0.07), transparent 70%);
+  animation: nebulaBreath 9s steps(6) infinite alternate;
+}
+.starfield::after {
+  background:
+    radial-gradient(ellipse 42% 30% at 28% 62%, rgba(127,255,212,0.06), transparent 70%),
+    radial-gradient(ellipse 45% 34% at 72% 76%, rgba(255,110,180,0.07), transparent 70%);
+  animation: nebulaBreath 13s steps(8) infinite alternate-reverse;
+}
+@keyframes nebulaBreath {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
 .star {
-  position: absolute; width: 2px; height: 2px; background: #fff;
+  position: absolute; background: #fff;
+  animation: twinkle var(--twinkle-dur, 1.2s) steps(2) infinite;
+}
+.star.s1 { width: 1px; height: 1px; }
+.star.s2 { width: 2px; height: 2px; }
+.star.s3 { width: 3px; height: 3px; box-shadow: 0 0 4px 1px currentColor; }
+.star.mint { background: var(--accent-mint); color: var(--accent-mint); }
+.star.pink { background: var(--accent-pink); color: var(--accent-pink); }
+.star.yellow { background: var(--accent-yellow); color: var(--accent-yellow); }
+@keyframes twinkle {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
 }
 .blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
@@ -87,7 +130,9 @@ body {
 .title-bar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px;
-  background: linear-gradient(180deg, rgba(58,45,122,0.92) 0%, rgba(37,29,77,0.94) 100%);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, rgb(58,45,122) var(--ui-alpha-pct), transparent) 0%,
+    color-mix(in srgb, rgb(37,29,77) var(--ui-alpha-pct), transparent) 100%);
   border-bottom: 4px solid var(--border-dark);
   -webkit-app-region: drag; position: relative; z-index: 5; flex-shrink: 0;
 }
@@ -96,10 +141,11 @@ body {
 }
 .title-bar .title-logo {
   width: 20px; height: 20px;
+  opacity: var(--ui-icon-alpha);
 }
 .title-bar .controls { display: flex; gap:6px; -webkit-app-region: no-drag; }
 .tb-btn {
-  width: 20px; height: 20px; background: var(--bg-deep); border: none; cursor: pointer;
+  width: 20px; height: 20px; background: var(--deep-surface); border: none; cursor: pointer;
   color: var(--text-main); font-family: 'Press Start 2P', monospace; font-size: 8px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: inset -2px -2px 0 var(--border-dark), inset 2px 2px 0 var(--border-light);
@@ -125,6 +171,7 @@ body {
 .hero .sub { font-family: 'VT323', monospace; font-size: 16px; color: var(--text-dim); }
 .hero .camera-logo {
   width: 44px; height: 44px; margin: 0 auto 4px; display: block;
+  opacity: var(--ui-icon-alpha);
 }
 
 .sparkle { display: inline-block; color: var(--accent-yellow); animation: sparkle 1.2s steps(2) infinite; }
@@ -134,21 +181,22 @@ body {
 .pixel-label {
   font-family: 'Press Start 2P', monospace; font-size: 8px;
   color: var(--accent-mint); text-transform: uppercase; letter-spacing: 1px;
-  margin-bottom: 6px; display: block;
+  margin-bottom: 8px; display: block;
+  border-bottom: 2px solid var(--border-dark); padding-bottom: 4px;
 }
 
 .mode-block {
-  background: var(--bg-mid); padding: 10px 12px; margin-bottom: 8px;
+  background: var(--bg-mid-surface); padding: 10px 12px; margin-bottom: 8px;
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
   position: relative;
 }
 .mode-block.active {
-  background: var(--bg-panel);
+  background: var(--bg-panel-surface);
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light), 0 0 0 2px var(--accent-mint);
 }
 .mode-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; cursor: pointer; }
 .mode-radio {
-  width: 18px; height: 18px; background: var(--bg-deep); flex-shrink:0;
+  width: 18px; height: 18px; background: var(--deep-surface); flex-shrink:0;
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
   display: flex; align-items: center; justify-content: center;
 }
@@ -163,7 +211,7 @@ body {
 }
 .mode-tag {
   font-family: 'Press Start 2P', monospace; font-size: 7px; padding: 3px 6px;
-  background: var(--accent-yellow); color: var(--bg-deep);
+  background: var(--yellow-surface); color: var(--bg-deep);
   box-shadow: 0 -2px 0 #fff6b0, 0 2px 0 #c5a820, -2px 0 0 #fff6b0, 2px 0 0 #c5a820;
 }
 .mode-body { padding-left: 28px; }
@@ -183,7 +231,7 @@ body {
 
 .mode-num-input {
   font-family: 'VT323', monospace; font-size: 18px; padding: 4px 8px; width: 70px;
-  background: var(--bg-deep); color: var(--accent-mint); border: none; outline: none;
+  background: var(--deep-surface); color: var(--accent-mint); border: none; outline: none;
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
   caret-color: var(--accent-mint);
 }
@@ -195,25 +243,25 @@ body {
 .segmented { display: flex; gap: 0; }
 .segmented button {
   flex: 1; font-family: 'Press Start 2P', monospace; font-size: 9px; padding: 10px 6px;
-  background: var(--bg-deep); color: var(--text-dim); border: none; cursor: pointer;
+  background: var(--deep-surface); color: var(--text-dim); border: none; cursor: pointer;
   text-transform: uppercase;
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
 }
 .segmented button.active {
-  background: var(--accent-pink); color: #1a0a15;
+  background: var(--pink-surface); color: #1a0a15;
   box-shadow: inset -2px -2px 0 #b83d7a, inset 2px 2px 0 #ff9dcf;
 }
 
 .locked-badge {
   font-family: 'VT323', monospace; font-size: 16px; padding: 4px 10px;
-  background: var(--bg-deep); color: var(--text-muted);
+  background: var(--deep-surface); color: var(--text-muted);
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--bg-panel-2);
 }
 
 .pixel-btn {
   display: inline-flex; align-items: center; justify-content: center;
   font-family: 'Press Start 2P', monospace; font-size: 10px;
-  padding: 10px 14px; color: var(--bg-deep); background: var(--accent-mint);
+  padding: 10px 14px; color: var(--bg-deep); background: var(--mint-surface);
   border: none; cursor: pointer; letter-spacing: 1px; text-transform: uppercase;
   box-shadow: 0 -4px 0 0 #b8ffe8, 0 4px 0 0 #2da88a, -4px 0 0 0 #b8ffe8, 4px 0 0 0 #2da88a;
   transition: transform 0.05s;
@@ -224,17 +272,17 @@ body {
   box-shadow: 0 -4px 0 0 #2da88a, 0 4px 0 0 #b8ffe8, -4px 0 0 0 #2da88a, 4px 0 0 0 #b8ffe8;
 }
 .pixel-btn.pink {
-  background: var(--accent-pink); color: #1a0a15;
+  background: var(--pink-surface); color: #1a0a15;
   box-shadow: 0 -4px 0 0 #ff9dcf, 0 4px 0 0 #b83d7a, -4px 0 0 0 #ff9dcf, 4px 0 0 0 #b83d7a;
 }
 .pixel-btn.pink:hover { background: #ff8ac5; }
 .pixel-btn.red {
-  background: var(--accent-red); color: #fff;
+  background: var(--red-surface); color: #fff;
   box-shadow: 0 -4px 0 0 #ff8fa5, 0 4px 0 0 #8a1a2f, -4px 0 0 0 #ff8fa5, 4px 0 0 0 #8a1a2f;
 }
 .pixel-btn.red:hover { background: #ff6b85; }
 .pixel-btn.ghost {
-  background: var(--bg-panel-2); color: var(--text-main);
+  background: var(--bg-panel2-surface); color: var(--text-main);
   box-shadow: 0 -4px 0 0 var(--border-light), 0 4px 0 0 var(--border-dark), -4px 0 0 0 var(--border-light), 4px 0 0 0 var(--border-dark);
 }
 .pixel-btn.ghost:hover { background: var(--border-light); color: var(--bg-deep); }
@@ -244,16 +292,16 @@ body {
 
 .pixel-input {
   font-family: 'VT323', monospace; font-size: 18px; padding: 6px 10px;
-  background: var(--bg-deep); color: var(--accent-mint); border: none; outline: none; width: 100%;
+  background: var(--deep-surface); color: var(--accent-mint); border: none; outline: none; width: 100%;
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
   caret-color: var(--accent-mint);
 }
-.pixel-input:focus { background: #050310; }
+.pixel-input:focus { background: var(--deep-surface); }
 .pixel-input[readonly] { cursor: pointer; }
 
 .pixel-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-family: 'VT323', monospace; font-size: 17px; }
 .pixel-check .box {
-  width: 18px; height: 18px; background: var(--bg-deep); flex-shrink: 0;
+  width: 18px; height: 18px; background: var(--deep-surface); flex-shrink: 0;
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
   display: flex; align-items: center; justify-content: center;
 }
@@ -269,11 +317,11 @@ body {
   min-width: 70px; flex-shrink: 0; text-transform: uppercase;
 }
 .hotkey-row .hk-input { flex: 1; }
-.hotkey-row.recording .pixel-input { background: #2a0a15; color: var(--accent-pink); }
+.hotkey-row.recording .pixel-input { background: var(--pink-surface); color: var(--accent-pink); }
 
 .kbd {
   display: inline-block; font-family: 'Press Start 2P', monospace; font-size: 8px;
-  padding: 4px 6px; background: var(--bg-deep); color: var(--accent-yellow);
+  padding: 4px 6px; background: var(--deep-surface); color: var(--accent-yellow);
   box-shadow: inset -2px -2px 0 var(--border-dark), inset 2px 2px 0 var(--border-light); margin: 0 2px;
 }
 
@@ -288,6 +336,23 @@ body {
 
 .quality-inline input[type=range] { flex: 1; accent-color: var(--accent-mint); }
 
+/* Unified settings rows */
+.set-row {
+  display: flex; align-items: center; gap: 10px; padding: 4px 0;
+  font-family: 'VT323', monospace; font-size: 16px;
+}
+.set-label {
+  color: var(--text-dim); min-width: 150px; flex-shrink: 0;
+}
+.set-label.accent { color: var(--accent-pink); }
+.set-label.dim { color: var(--text-muted); }
+.set-val {
+  font-family: 'Press Start 2P', monospace; font-size: 9px;
+  color: var(--accent-yellow); min-width: 56px; text-align: right; flex-shrink: 0;
+}
+.set-row input[type=range] { flex: 1; accent-color: var(--accent-mint); }
+.set-row .pixel-input { flex: 1; }
+
 .status-dot {
   display: inline-block; width: 10px; height: 10px; background: var(--accent-mint);
   box-shadow: inset -2px -2px 0 #2da88a, inset 2px 2px 0 #b8ffe8;
@@ -300,7 +365,7 @@ body {
 
 .status-bar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 16px; background: var(--bg-panel-2);
+  padding: 6px 16px; background: var(--bg-panel2-surface);
   border-top: 2px solid var(--border-dark);
   font-family: 'VT323', monospace; font-size: 15px; color: var(--text-dim);
   flex-shrink: 0; position: relative; z-index: 5;
@@ -481,35 +546,38 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
   </div>
 
   <div class="section">
-    <label class="pixel-label">▸ FILE & SAVE</label>
-    <div class="row">
-      <input class="pixel-input grow" id="save-dir" type="text" spellcheck="false">
-      <button class="pixel-btn" id="btn-browse" style="padding:8px 10px;">BROWSE</button>
-      <button class="pixel-btn ghost" id="btn-open" style="padding:8px 10px;">OPEN</button>
+    <label class="pixel-label">▸ OUTPUT</label>
+    <div class="set-row">
+      <span class="set-label">SAVE DIRECTORY</span>
+      <input class="pixel-input" id="save-dir" type="text" spellcheck="false">
     </div>
-    <div class="toast-setting">
-      <span style="min-width:140px;">FILENAME PREFIX:</span>
+    <div class="row" style="margin-top:0;justify-content:flex-end;">
+      <button class="pixel-btn" id="btn-browse" style="padding:6px 10px;">BROWSE</button>
+      <button class="pixel-btn ghost" id="btn-open" style="padding:6px 10px;">OPEN</button>
+    </div>
+    <div class="set-row">
+      <span class="set-label">FILENAME PREFIX</span>
       <input class="pixel-input grow" id="filename-prefix" type="text" spellcheck="false" value="snap" style="font-size:16px;padding:6px 10px;">
     </div>
-    <div class="toast-setting">
-      <span style="min-width:140px;">THUMBNAIL SIZE:</span>
+    <div class="set-row">
+      <span class="set-label">THUMBNAIL SIZE</span>
       <input type="range" id="thumb-size" min="60" max="256" step="8" value="128">
-      <span class="val" id="thumb-size-label">128px</span>
+      <span class="set-val" id="thumb-size-label">128px</span>
     </div>
   </div>
 
   <div class="section">
     <label class="pixel-label">▸ HOTKEYS</label>
-    <div class="row hotkey-row" id="hk-image-wrap">
-      <span class="hk-label">IMAGE:</span>
+    <div class="set-row hotkey-row" id="hk-image-wrap">
+      <span class="set-label accent">IMAGE</span>
       <input class="pixel-input hk-input" id="hotkey-image" type="text" readonly placeholder="Click to record...">
     </div>
-    <div class="row hotkey-row" id="hk-video-wrap">
-      <span class="hk-label">VIDEO:</span>
+    <div class="set-row hotkey-row" id="hk-video-wrap">
+      <span class="set-label accent">VIDEO</span>
       <input class="pixel-input hk-input" id="hotkey-video" type="text" readonly placeholder="Click to record...">
     </div>
-    <div class="row hotkey-row" id="hk-motion-wrap">
-      <span class="hk-label">MOTION:</span>
+    <div class="set-row hotkey-row" id="hk-motion-wrap">
+      <span class="set-label accent">MOTION</span>
       <input class="pixel-input hk-input" id="hotkey-motion" type="text" readonly placeholder="Click to record...">
     </div>
   </div>
@@ -523,8 +591,8 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
         <span>RECORD SYSTEM AUDIO</span>
       </label>
     </div>
-    <div class="row" style="margin-top:8px;">
-      <span class="mode-sub-label" style="min-width:140px;">REC POSITION:</span>
+    <div class="set-row">
+      <span class="set-label">REC POSITION</span>
       <div class="segmented grow" id="rec-pos-picker">
         <button data-pos="top-left" class="active">TL</button>
         <button data-pos="top-right">TR</button>
@@ -532,15 +600,44 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
         <button data-pos="bottom-right">BR</button>
       </div>
     </div>
-    <div class="toast-setting">
-      <span style="min-width:140px;">VIDEO BITRATE:</span>
+    <div class="set-row">
+      <span class="set-label">VIDEO BITRATE</span>
       <input type="range" id="video-bitrate" min="1" max="20" step="1" value="8">
-      <span class="val" id="video-bitrate-label">8 Mbps</span>
+      <span class="set-val" id="video-bitrate-label">8 Mbps</span>
     </div>
-    <div class="toast-setting">
-      <span style="min-width:140px;">TOAST DURATION:</span>
+    <div class="set-row">
+      <span class="set-label">TOAST DURATION</span>
       <input type="range" id="toast-dur" min="1000" max="6000" step="500" value="2500">
-      <span class="val" id="toast-dur-label">2.5s</span>
+      <span class="set-val" id="toast-dur-label">2.5s</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="pixel-label">▸ APPEARANCE</label>
+    <div class="set-row">
+      <span class="set-label">WINDOW TRANSPARENCY</span>
+      <input type="range" id="win-transparency" min="0" max="100" step="5" value="0">
+      <span class="set-val" id="win-transparency-label">0%</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">UI TRANSPARENCY</span>
+      <input type="range" id="ui-transparency" min="0" max="100" step="5" value="0">
+      <span class="set-val" id="ui-transparency-label">0%</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">STARFIELD DENSITY</span>
+      <input type="range" id="star-density" min="0" max="100" step="5" value="50">
+      <span class="set-val" id="star-density-label">50%</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">STAR TWINKLE SPEED</span>
+      <input type="range" id="star-twinkle" min="0" max="100" step="5" value="50">
+      <span class="set-val" id="star-twinkle-label">50%</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">METEOR RATE</span>
+      <input type="range" id="meteor-rate" min="0" max="100" step="5" value="50">
+      <span class="set-val" id="meteor-rate-label">50%</span>
     </div>
   </div>
 
@@ -594,11 +691,6 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
         <span class="box"></span>
         <span>CLOSE TO TRAY (DON'T EXIT)</span>
       </label>
-    </div>
-    <div class="toast-setting">
-      <span style="min-width:140px;">UI OPACITY:</span>
-      <input type="range" id="ui-opacity" min="50" max="100" step="5" value="100">
-      <span class="val" id="ui-opacity-label">100%</span>
     </div>
   </div>
 

@@ -63,8 +63,16 @@ pub struct AppConfig {
     pub record_system_audio: bool,
     #[serde(default = "default_audio_bitrate")]
     pub audio_bitrate: u32,
-    #[serde(default = "default_ui_opacity")]
-    pub ui_opacity: u32,
+    #[serde(default = "default_window_transparency")]
+    pub window_transparency: u32,
+    #[serde(default = "default_ui_transparency")]
+    pub ui_transparency: u32,
+    #[serde(default = "default_starfield_density")]
+    pub starfield_density: u32,
+    #[serde(default = "default_star_twinkle_speed")]
+    pub star_twinkle_speed: u32,
+    #[serde(default = "default_meteor_rate")]
+    pub meteor_rate: u32,
 }
 
 fn default_mode() -> String { "image".to_string() }
@@ -86,7 +94,11 @@ fn default_rec_position() -> String { "top-left".to_string() }
 fn default_filename_prefix() -> String { "snap".to_string() }
 fn default_close_behavior() -> bool { true }
 fn default_audio_bitrate() -> u32 { 192_000 }
-fn default_ui_opacity() -> u32 { 100 }
+fn default_window_transparency() -> u32 { 0 }
+fn default_ui_transparency() -> u32 { 0 }
+fn default_starfield_density() -> u32 { 50 }
+fn default_star_twinkle_speed() -> u32 { 50 }
+fn default_meteor_rate() -> u32 { 50 }
 fn default_hotkey_image() -> String { "CommandOrControl+Shift+S".to_string() }
 fn default_hotkey_video() -> String { "CommandOrControl+Shift+V".to_string() }
 fn default_hotkey_motion() -> String { "CommandOrControl+Shift+M".to_string() }
@@ -131,7 +143,11 @@ impl Default for AppConfig {
             save_thumbnail: default_false(),
             record_system_audio: default_true(),
             audio_bitrate: default_audio_bitrate(),
-            ui_opacity: default_ui_opacity(),
+            window_transparency: default_window_transparency(),
+            ui_transparency: default_ui_transparency(),
+            starfield_density: default_starfield_density(),
+            star_twinkle_speed: default_star_twinkle_speed(),
+            meteor_rate: default_meteor_rate(),
         }
     }
 }
@@ -163,6 +179,11 @@ impl AppConfig {
         };
         cfg.jpeg_quality = cfg.jpeg_quality.clamp(1, 100);
         cfg.video_bitrate = cfg.video_bitrate.clamp(1_000_000, 20_000_000);
+        cfg.window_transparency = cfg.window_transparency.clamp(0, 100);
+        cfg.ui_transparency = cfg.ui_transparency.clamp(0, 100);
+        cfg.starfield_density = cfg.starfield_density.clamp(0, 100);
+        cfg.star_twinkle_speed = cfg.star_twinkle_speed.clamp(0, 100);
+        cfg.meteor_rate = cfg.meteor_rate.clamp(0, 100);
         Ok(cfg)
     }
 

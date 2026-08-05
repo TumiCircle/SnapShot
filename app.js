@@ -9,26 +9,53 @@ let activeMode = 'image';
 let activeFmt = 'png';
 let activeRecPos = 'top-left';
 let cooldown = false;
+let currentCfg = null;
 
-// ---- Starfield (50 twinkling stars) ----
-(function buildStars() {
+function clampInt(v, lo, hi) {
+  const n = parseInt(v, 10);
+  if (isNaN(n)) return lo;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+// ---- Starfield (density + twinkle speed from settings) ----
+function buildStarfield() {
   const sf = $('#starfield');
   if (!sf) return;
-  for (let i = 0; i < 50; i++) {
+  const density = clampInt($('#star-density') && $('#star-density').value, 0, 100);
+  const twinkle = clampInt($('#star-twinkle') && $('#star-twinkle').value, 0, 100);
+  const count = Math.round(20 + density * 0.8);
+  sf.innerHTML = '';
+  const palette = [null, null, null, 'mint', 'pink', 'yellow'];
+  for (let i = 0; i < count; i++) {
     const s = document.createElement('div');
-    s.className = 'star';
+    const size = Math.random() < 0.7 ? 1 : (Math.random() < 0.6 ? 2 : 3);
+    s.className = 'star s' + size;
+    const tint = palette[Math.floor(Math.random() * palette.length)];
+    if (tint) s.classList.add(tint);
     s.style.left = Math.random() * 100 + '%';
     s.style.top = Math.random() * 100 + '%';
-    s.style.opacity = Math.random() * 0.6 + 0.3;
-    if (Math.random() > 0.6) s.classList.add('blink');
+    if (twinkle > 0) {
+      const dur = Math.max(0.4, 1.8 - twinkle / 100).toFixed(2);
+      s.style.setProperty('--twinkle-dur', dur + 's');
+    } else {
+      s.style.animation = 'none';
+    }
     sf.appendChild(s);
   }
-})();
+}
 
-// ---- Meteor shower ----
-(function spawnMeteors() {
+// ---- Meteor shower (rate from settings) ----
+let meteorTimer = null;
+function startMeteors() {
   const sf = $('#starfield');
   if (!sf) return;
+  if (meteorTimer) {
+    clearInterval(meteorTimer);
+    meteorTimer = null;
+  }
+  const rate = clampInt($('#meteor-rate') && $('#meteor-rate').value, 0, 100);
+  if (rate <= 0) return;
+  const interval = Math.round(5200 - rate * 42);
   function makeMeteor() {
     const m = document.createElement('div');
     m.className = 'meteor';
@@ -45,10 +72,21 @@ let cooldown = false;
     sf.appendChild(m);
     setTimeout(() => m.remove(), 1600);
   }
-  setInterval(() => {
-    if (Math.random() > 0.35) makeMeteor();
-  }, 2200);
-})();
+  meteorTimer = setInterval(() => {
+    if (Math.random() < 0.55) makeMeteor();
+  }, interval);
+}
+
+// ---- Appearance (window/UI transparency + starfield) ----
+function applyAppearance() {
+  const winT = clampInt($('#win-transparency').value, 0, 100);
+  const uiT = clampInt($('#ui-transparency').value, 0, 100);
+  document.documentElement.style.setProperty('--win-alpha', (1 - winT / 100).toFixed(3));
+  document.documentElement.style.setProperty('--ui-alpha-pct', (100 - uiT) + '%');
+  document.documentElement.style.setProperty('--ui-icon-alpha', Math.max(0.2, 1 - uiT / 100).toFixed(3));
+  buildStarfield();
+  startMeteors();
+}
 
 // ---- Mode block selection ----
 const modeBlocks = $$('.mode-block');
@@ -112,14 +150,33 @@ $('#toast-dur').addEventListener('input', (e) => {
 $('#thumb-size').addEventListener('input', (e) => {
   $('#thumb-size-label').textContent = e.target.value + 'px';
 });
-$('#ui-opacity').addEventListener('input', (e) => {
-  const val = e.target.value;
-  $('#ui-opacity-label').textContent = val + '%';
-  document.body.style.setProperty('--ui-opacity', (val / 100).toString());
-});
 $('#video-bitrate').addEventListener('input', (e) => {
   $('#video-bitrate-label').textContent = e.target.value + ' Mbps';
 });
+$('#win-transparency').addEventListener('input', (e) => {
+  $('#win-transparency-label').textContent = e.target.value + '%';
+  applyAppearance();
+});
+$('#ui-transparency').addEventListener('input', (e) => {
+  $('#ui-transparency-label').textContent = e.target.value + '%';
+  applyAppearance();
+});
+$('#star-density').addEventListener('input', (e) => {
+  $('#star-density-label').textContent = e.target.value + '%';
+  applyAppearance();
+});
+$('#star-twinkle').addEventListener('input', (e) => {
+  $('#star-twinkle-label').textContent = e.target.value + '%';
+  applyAppearance();
+});
+$('#meteor-rate').addEventListener('input', (e) => {
+  $('#meteor-rate-label').textContent = e.target.value + '%';
+  applyAppearance();
+});
+
+// Initial starfield before config loads (defaults)
+buildStarfield();
+startMeteors();
 
 // ---- Hotkey recording ----
 let recordingHotkey = null;
@@ -301,7 +358,11 @@ function collectConfig() {
     record_system_audio: $('#record-audio').checked,
     rec_position: recPosBtn ? recPosBtn.dataset.pos : 'top-left',
     close_to_tray: $('#close-to-tray').checked,
-    ui_opacity: parseInt($('#ui-opacity').value) || 100,
+    window_transparency: parseInt($('#win-transparency').value) || 0,
+    ui_transparency: parseInt($('#ui-transparency').value) || 0,
+    starfield_density: parseInt($('#star-density').value) || 50,
+    star_twinkle_speed: parseInt($('#star-twinkle').value) || 50,
+    meteor_rate: parseInt($('#meteor-rate').value) || 50,
     hotkey_image: $('#hotkey-image').dataset.pending || $('#hotkey-image').value || 'CommandOrControl+Shift+S',
     hotkey_video: $('#hotkey-video').dataset.pending || $('#hotkey-video').value || 'CommandOrControl+Shift+V',
     hotkey_motion: $('#hotkey-motion').dataset.pending || $('#hotkey-motion').value || 'CommandOrControl+Shift+M',
@@ -349,9 +410,17 @@ function applyConfig(cfg) {
   $('#save-thumbnail').checked = !!cfg.save_thumbnail;
   $('#record-audio').checked = cfg.record_system_audio !== false;
   $('#close-to-tray').checked = cfg.close_to_tray !== false;
-  $('#ui-opacity').value = cfg.ui_opacity || 100;
-  $('#ui-opacity-label').textContent = (cfg.ui_opacity || 100) + '%';
-  document.body.style.setProperty('--ui-opacity', ((cfg.ui_opacity || 100) / 100).toString());
+  $('#win-transparency').value = cfg.window_transparency ?? 0;
+  $('#win-transparency-label').textContent = (cfg.window_transparency ?? 0) + '%';
+  $('#ui-transparency').value = cfg.ui_transparency ?? 0;
+  $('#ui-transparency-label').textContent = (cfg.ui_transparency ?? 0) + '%';
+  $('#star-density').value = cfg.starfield_density ?? 50;
+  $('#star-density-label').textContent = (cfg.starfield_density ?? 50) + '%';
+  $('#star-twinkle').value = cfg.star_twinkle_speed ?? 50;
+  $('#star-twinkle-label').textContent = (cfg.star_twinkle_speed ?? 50) + '%';
+  $('#meteor-rate').value = cfg.meteor_rate ?? 50;
+  $('#meteor-rate-label').textContent = (cfg.meteor_rate ?? 50) + '%';
+  applyAppearance();
 
   if (cfg.hotkey_image) { $('#hotkey-image').value = cfg.hotkey_image; }
   if (cfg.hotkey_video) { $('#hotkey-video').value = cfg.hotkey_video; }
@@ -395,6 +464,7 @@ $$('input[type=number]').forEach(inp => {
 
 // ---- Load config ----
 invoke('load_config').then(cfg => {
+  currentCfg = cfg;
   applyConfig(cfg);
 }).catch(() => {
   updateFmtUI();

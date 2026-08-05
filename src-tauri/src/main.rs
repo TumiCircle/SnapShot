@@ -89,6 +89,12 @@ fn merge_and_validate_config(
     config.jpeg_quality = config.jpeg_quality.clamp(1, 100);
     // Clamp video bitrate to 1..20 Mbps
     config.video_bitrate = config.video_bitrate.clamp(1_000_000, 20_000_000);
+    // Clamp appearance settings to 0..100
+    config.window_transparency = config.window_transparency.clamp(0, 100);
+    config.ui_transparency = config.ui_transparency.clamp(0, 100);
+    config.starfield_density = config.starfield_density.clamp(0, 100);
+    config.star_twinkle_speed = config.star_twinkle_speed.clamp(0, 100);
+    config.meteor_rate = config.meteor_rate.clamp(0, 100);
     Ok(config)
 }
 
@@ -734,5 +740,33 @@ mod tests {
         )
         .unwrap();
         assert_eq!(merged.video_bitrate, 12_000_000);
+    }
+
+    #[test]
+    fn appearance_settings_are_clamped_and_default() {
+        let current = base_config();
+        let merged = merge_and_validate_config(
+            &current,
+            serde_json::json!({
+                "window_transparency": 150,
+                "ui_transparency": 101,
+                "starfield_density": 101,
+                "star_twinkle_speed": 30,
+                "meteor_rate": 70,
+            }),
+        )
+        .unwrap();
+        assert_eq!(merged.window_transparency, 100);
+        assert_eq!(merged.ui_transparency, 100);
+        assert_eq!(merged.starfield_density, 100);
+        assert_eq!(merged.star_twinkle_speed, 30);
+        assert_eq!(merged.meteor_rate, 70);
+
+        let fresh = merge_and_validate_config(&current, serde_json::json!({})).unwrap();
+        assert_eq!(fresh.window_transparency, 0);
+        assert_eq!(fresh.ui_transparency, 0);
+        assert_eq!(fresh.starfield_density, 50);
+        assert_eq!(fresh.star_twinkle_speed, 50);
+        assert_eq!(fresh.meteor_rate, 50);
     }
 }
