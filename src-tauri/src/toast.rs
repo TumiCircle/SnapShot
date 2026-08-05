@@ -28,7 +28,7 @@ fn build_status_toast(app: &AppHandle) -> Result<tauri::WebviewWindow, tauri::Er
         WebviewUrl::App("toast.html".into()),
     )
     .title("")
-    .inner_size(320.0, 100.0)
+    .inner_size(320.0, 80.0)
     .position(pos_x, pos_y)
     .decorations(false)
     .shadow(false)
@@ -136,15 +136,28 @@ fn show_toast(
         .lock()
         .map(|c| c.language.clone())
         .unwrap_or_else(|_| "en".to_string());
+    let (win_alpha, ui_opacity) = app
+        .state::<crate::AppState>()
+        .config
+        .lock()
+        .map(|c| {
+            (
+                1.0 - c.window_transparency as f64 / 100.0,
+                1.0 - c.ui_transparency as f64 / 100.0,
+            )
+        })
+        .unwrap_or((1.0, 1.0));
 
     let eval_script = format!(
-        "__setToastData('{}','{}','{}','{}','{}','{}')",
+        "__setToastData('{}','{}','{}','{}','{}','{}','{:.3}','{:.3}')",
         escape_js_string(&mode),
         escape_js_string(&game),
         escape_js_string(&fname),
         escape_js_string(&thumb),
         escape_js_string(&lang),
         escape_js_string(&status),
+        win_alpha,
+        ui_opacity,
     );
 
     // Update the content before showing so the first visible frame is correct.

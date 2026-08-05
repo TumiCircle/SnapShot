@@ -24,16 +24,28 @@ body.show{
 .t{
   width:100%;             /* 从固定 304px 改为 100% */
   height:100%;            /* 从固定 84px 改为 100% */
-  background:#1d1840;
-  border-radius:6px;
+  background:rgba(29,24,64,var(--toast-win-alpha,1));
+  clip-path:polygon(
+    8px 0,
+    calc(100% - 8px) 0,
+    calc(100% - 8px) 4px,
+    calc(100% - 4px) 4px,
+    calc(100% - 4px) 8px,
+    calc(100% - 4px) calc(100% - 8px),
+    calc(100% - 4px) calc(100% - 4px),
+    calc(100% - 8px) calc(100% - 4px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    8px calc(100% - 4px),
+    4px calc(100% - 4px),
+    4px calc(100% - 8px),
+    4px 8px,
+    4px 4px,
+    8px 4px
+  );
   overflow:hidden;
   display:flex;gap:8px;padding:8px;  /* 保留内部 padding，用于内容与窗口边缘的间距 */
   position:relative;
-  border:2px solid #0a0818;
-  box-shadow:
-    0 0 0 2px #8c82ff,
-    inset 2px 2px 0 #0a0818,
-    inset -2px -2px 0 #8c82ff;
 }
 .t::after{
   content:'';position:absolute;inset:0;pointer-events:none;
@@ -94,6 +106,9 @@ body.show{
   flex:1;display:flex;flex-direction:column;
   justify-content:center;gap:4px;height:64px;min-width:0;overflow:hidden;
   position:relative;z-index:1;
+}
+.th, .in {
+  opacity: var(--toast-ui-opacity, 1);
 }
 .mt{
   display:inline-flex;align-items:center;gap:4px;
@@ -201,8 +216,12 @@ function translateErrorZh(msg) {
   }
   return msg;
 }
-window.__setToastData = function(mode, game, fname, thumbB64, lang, status) {
+window.__setToastData = function(mode, game, fname, thumbB64, lang, status, winAlpha, uiOpacity) {
   var d = I18N[lang === 'zh' ? 'zh' : 'en'] || I18N.en;
+  if (winAlpha !== undefined) {
+    document.documentElement.style.setProperty('--toast-win-alpha', winAlpha);
+    document.documentElement.style.setProperty('--toast-ui-opacity', uiOpacity);
+  }
   var modeEl = document.getElementById('mode');
   var msgEl = document.getElementById('msg');
   var thumbEl = document.getElementById('thumb');

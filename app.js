@@ -16,28 +16,16 @@ function clampInt(v, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
 }
 
-// Discrete tier mapping for stepped sliders: 0/25/50/75 -> OFF/LOW/MED/HIGH
-function tierKey(v) {
-  if (v <= 12) return 'off';
-  if (v <= 37) return 'low';
-  if (v <= 62) return 'med';
-  if (v <= 87) return 'high';
-  return 'max';
-}
-
-function updateTierLabel(inputId, labelId) {
-  const input = $(inputId);
-  const label = $(labelId);
-  if (!input || !label) return;
-  label.textContent = t(tierKey(parseInt(input.value, 10)));
-}
-
-function refreshTierLabels() {
-  updateTierLabel('#win-transparency', '#win-transparency-label');
-  updateTierLabel('#ui-transparency', '#ui-transparency-label');
-  updateTierLabel('#star-density', '#star-density-label');
-  updateTierLabel('#star-twinkle', '#star-twinkle-label');
-  updateTierLabel('#meteor-rate', '#meteor-rate-label');
+function updateAppearanceLabels() {
+  [['#win-transparency', '#win-transparency-label'],
+   ['#ui-transparency', '#ui-transparency-label'],
+   ['#star-density', '#star-density-label'],
+   ['#star-twinkle', '#star-twinkle-label'],
+   ['#meteor-rate', '#meteor-rate-label']].forEach(([inputId, labelId]) => {
+    const input = $(inputId);
+    const label = $(labelId);
+    if (input && label) label.textContent = input.value + '%';
+  });
 }
 
 // ---- i18n ----
@@ -96,11 +84,6 @@ const I18N = {
     completed: 'COMPLETED',
     saved: 'SAVED',
     error: 'ERROR',
-    off: 'OFF',
-    low: 'LOW',
-    med: 'MED',
-    high: 'HIGH',
-    max: 'MAX',
   },
   zh: {
     appName: '像素快拍',
@@ -156,11 +139,6 @@ const I18N = {
     completed: '完成',
     saved: '已保存',
     error: '错误',
-    off: '关',
-    low: '低',
-    med: '中',
-    high: '高',
-    max: '满',
   },
 };
 
@@ -185,7 +163,7 @@ function applyLanguage() {
   });
   const sbText = $('#sb-text');
   if (sbText && !sbText.dataset.busy) sbText.textContent = t('systemOnline');
-  refreshTierLabels();
+  updateAppearanceLabels();
 }
 
 function translateError(msg) {
@@ -241,12 +219,19 @@ function buildStarfield() {
 let meteorTimer = null;
 const meteorRafs = new Set();
 const meteorTimers = new Set();
+let activeMeteors = 0;
 
 function clearMeteorFx() {
   meteorRafs.forEach(id => cancelAnimationFrame(id));
   meteorRafs.clear();
   meteorTimers.forEach(id => clearInterval(id));
   meteorTimers.clear();
+  activeMeteors = 0;
+  const light = $('#meteor-light');
+  if (light) {
+    light.style.opacity = '0';
+    light.style.background = 'transparent';
+  }
 }
 
 function startMeteors() {
@@ -271,6 +256,8 @@ function startMeteors() {
     const glow = pick.glow;
     const m = document.createElement('div');
     m.className = 'meteor';
+    activeMeteors++;
+    const light = $('#meteor-light');
 
     // Bright pixel head with a shimmering glow.
     const headSize = 9;
@@ -329,10 +316,10 @@ function startMeteors() {
       p.style.setProperty('--py', (Math.sin(angle) * speed).toFixed(1) + 'px');
       p.style.animation =
         'meteorSpark ' +
-        (burst ? 500 + Math.random() * 500 : 250 + Math.random() * 350).toFixed(0) +
+        (burst ? 800 + Math.random() * 600 : 600 + Math.random() * 600).toFixed(0) +
         'ms steps(4) forwards';
       sf.appendChild(p);
-      setTimeout(() => p.remove(), 1400);
+      setTimeout(() => p.remove(), 2200);
     }
 
     const particleTimer = setInterval(() => {
@@ -355,6 +342,12 @@ function startMeteors() {
       const x = startX + distX * t;
       const y = startY + distY * t;
       m.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)';
+      if (light) {
+        const intensity = Math.sin(Math.PI * t) * 0.30;
+        light.style.opacity = intensity.toFixed(3);
+        light.style.background =
+          'radial-gradient(circle 220px at ' + x.toFixed(0) + 'px ' + y.toFixed(0) + 'px, rgba(' + glow + ',0.55), rgba(' + main + ',0.16) 45%, transparent 72%)';
+      }
       // Quick fade in, slow fade out near the end.
       m.style.opacity = t < 0.05 ? String(t / 0.05) : t > 0.85 ? String(Math.max(0, (1 - t) / 0.15)) : '1';
       if (t < 1) {
@@ -363,6 +356,11 @@ function startMeteors() {
       } else {
         clearInterval(particleTimer);
         meteorTimers.delete(particleTimer);
+        activeMeteors = Math.max(0, activeMeteors - 1);
+        if (activeMeteors === 0 && light) {
+          light.style.opacity = '0';
+          light.style.background = 'transparent';
+        }
         m.remove();
       }
     }
@@ -441,22 +439,17 @@ $('#video-bitrate').addEventListener('input', (e) => {
   $('#video-bitrate-label').textContent = e.target.value + ' Mbps';
 });
 
-// ---- Appearance stepped sliders (discrete tiers with snap feedback) ----
+// ---- Appearance sliders (continuous 0-100%) ----
 [['#win-transparency', '#win-transparency-label'],
  ['#ui-transparency', '#ui-transparency-label'],
  ['#star-density', '#star-density-label'],
  ['#star-twinkle', '#star-twinkle-label'],
  ['#meteor-rate', '#meteor-rate-label']].forEach(([inputId, labelId]) => {
   const el = $(inputId);
-  if (!el) return;
-  el.addEventListener('input', () => {
-    updateTierLabel(inputId, labelId);
-    const label = $(labelId);
-    if (label) {
-      label.classList.remove('pop');
-      void label.offsetWidth; // restart the pop animation
-      label.classList.add('pop');
-    }
+  const label = $(labelId);
+  if (!el || !label) return;
+  el.addEventListener('input', (e) => {
+    label.textContent = e.target.value + '%';
     applyAppearance();
   });
 });
@@ -710,7 +703,7 @@ function applyConfig(cfg) {
   $('#star-density').value = cfg.starfield_density ?? 50;
   $('#star-twinkle').value = cfg.star_twinkle_speed ?? 50;
   $('#meteor-rate').value = cfg.meteor_rate ?? 50;
-  refreshTierLabels();
+  updateAppearanceLabels();
   const lang = cfg.language === 'zh' ? 'zh' : 'en';
   langBtns.forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
   currentCfg = cfg;
