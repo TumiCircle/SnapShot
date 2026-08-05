@@ -2,6 +2,7 @@
 
 mod capture;
 mod config;
+mod log;
 mod toast;
 mod audio;
 
@@ -86,6 +87,8 @@ fn merge_and_validate_config(
     };
     // Clamp jpeg_quality to valid range
     config.jpeg_quality = config.jpeg_quality.clamp(1, 100);
+    // Clamp video bitrate to 1..20 Mbps
+    config.video_bitrate = config.video_bitrate.clamp(1_000_000, 20_000_000);
     Ok(config)
 }
 
@@ -103,8 +106,11 @@ fn reset_config(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<
 
 fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window: bool) -> Result<String, String> {
     if CAPTURE_LOCK.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-        return Err("Already capturing".to_string());
+        // A capture is already running: triggering again stops it early.
+        capture::STOP_REQUESTED.store(true, Ordering::SeqCst);
+        return Ok("stop-requested".to_string());
     }
+    capture::STOP_REQUESTED.store(false, Ordering::SeqCst);
 
     {
         let mut last = LAST_CAPTURE_TIME.lock().unwrap();
@@ -193,16 +199,19 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
                 }
                 capture::CaptureEvent::SaveComplete => {
                     CAPTURE_LOCK.store(false, Ordering::SeqCst);
+                    capture::STOP_REQUESTED.store(false, Ordering::SeqCst);
                 }
                 capture::CaptureEvent::Error(_e) => {
                     if comp.swap(true, Ordering::SeqCst) {
                         return;
                     }
                     CAPTURE_LOCK.store(false, Ordering::SeqCst);
+                    capture::STOP_REQUESTED.store(false, Ordering::SeqCst);
                     if let Some(w) = &main_window {
                         let _ = w.show();
                         let _ = w.emit("capture-error", _e.clone());
                     }
+                    toast::show_error_toast(&a_inner, &_e);
                     if let Some(rw) = &rec_window {
                         let _ = rw.hide();
                     }
@@ -286,7 +295,7 @@ fn parse_hotkey(s: &str) -> Option<Shortcut> {
     match s.parse::<Shortcut>() {
         Ok(accel) => Some(accel),
         Err(e) => {
-            eprintln!("Failed to parse hotkey '{}': {:?}", s, e);
+            crate::log_line!("Failed to parse hotkey '{}': {:?}", s, e);
             None
         }
     }
@@ -303,8 +312,8 @@ fn register_all_shortcuts(app: &tauri::AppHandle) {
     for (hk_str, mode_label) in [(&hk_img, "image"), (&hk_vid, "video"), (&hk_mot, "motion")] {
         if let Some(accel) = parse_hotkey(hk_str) {
             match gs.register(accel) {
-                Ok(_) => eprintln!("Registered {} hotkey: {}", mode_label, hk_str),
-                Err(e) => eprintln!("Failed to register {} hotkey '{}': {:?}", mode_label, hk_str, e),
+                Ok(_) => crate::log_line!("Registered {} hotkey: {}", mode_label, hk_str),
+                Err(e) => crate::log_line!("Failed to register {} hotkey '{}': {:?}", mode_label, hk_str, e),
             }
         }
     }
@@ -445,6 +454,7 @@ fn init_dpi_awareness() {
 }
 
 fn main() {
+    log::init();
     init_dpi_awareness();
 
     let config = AppConfig::load().unwrap_or_default();
@@ -696,7 +706,33 @@ mod tests {
         let merged = merge_and_validate_config(&current, incoming).unwrap();
         assert_eq!(merged.capture_target, "auto");
         assert_eq!(merged.video_format, "mp4");
+        assert_eq!(merged.video_bitrate, 8_000_000);
         assert_eq!(merged.motion_format, "gif");
         assert_eq!(merged.audio_bitrate, 192_000);
+    }
+
+    #[test]
+    fn video_bitrate_is_clamped_and_explicit_value_wins() {
+        let current = base_config();
+        let merged = merge_and_validate_config(
+            &current,
+            serde_json::json!({ "video_bitrate": 25_000_000 }),
+        )
+        .unwrap();
+        assert_eq!(merged.video_bitrate, 20_000_000);
+
+        let merged = merge_and_validate_config(
+            &current,
+            serde_json::json!({ "video_bitrate": 500_000 }),
+        )
+        .unwrap();
+        assert_eq!(merged.video_bitrate, 1_000_000);
+
+        let merged = merge_and_validate_config(
+            &current,
+            serde_json::json!({ "video_bitrate": 12_000_000 }),
+        )
+        .unwrap();
+        assert_eq!(merged.video_bitrate, 12_000_000);
     }
 }

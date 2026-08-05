@@ -117,6 +117,9 @@ $('#ui-opacity').addEventListener('input', (e) => {
   $('#ui-opacity-label').textContent = val + '%';
   document.body.style.setProperty('--ui-opacity', (val / 100).toString());
 });
+$('#video-bitrate').addEventListener('input', (e) => {
+  $('#video-bitrate-label').textContent = e.target.value + ' Mbps';
+});
 
 // ---- Hotkey recording ----
 let recordingHotkey = null;
@@ -282,6 +285,7 @@ function collectConfig() {
     jpeg_quality: parseInt($('#quality').value) || 90,
     video_duration: parseInt($('#vid-dur').value) || 3,
     video_fps: parseInt($('#vid-fps').value) || 30,
+    video_bitrate: (parseInt($('#video-bitrate').value) || 8) * 1000000,
     motion_duration: parseInt($('#mot-dur').value) || 3,
     motion_fps: parseInt($('#mot-fps').value) || 15,
     save_dir: $('#save-dir').value || '',
@@ -327,6 +331,8 @@ function applyConfig(cfg) {
 
   $('#vid-dur').value = cfg.video_duration || 3;
   $('#vid-fps').value = cfg.video_fps || 30;
+  $('#video-bitrate').value = Math.round((cfg.video_bitrate || 8000000) / 1000000);
+  $('#video-bitrate-label').textContent = $('#video-bitrate').value + ' Mbps';
   $('#mot-dur').value = cfg.motion_duration || 3;
   $('#mot-fps').value = cfg.motion_fps || 15;
   $('#save-dir').value = cfg.save_dir || '';
@@ -369,8 +375,8 @@ if (event) {
     const sbDot = $('#sb-dot');
     const sbText = $('#sb-text');
     if (sbDot) sbDot.classList.remove('rec');
-    if (sbText) sbText.textContent = 'ERROR';
-    setTimeout(() => { if (sbText) sbText.textContent = 'SYSTEM ONLINE'; }, 3000);
+    if (sbText) sbText.textContent = String(e.payload || 'ERROR').slice(0, 42);
+    setTimeout(() => { if (sbText) sbText.textContent = 'SYSTEM ONLINE'; }, 5000);
   });
   event.listen('save-completed', () => {
     const sbText = $('#sb-text');

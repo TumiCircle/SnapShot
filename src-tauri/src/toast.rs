@@ -40,6 +40,23 @@ pub fn show_toast_on_main(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "completed".to_string());
 
+    show_toast(app, mode_str, game_name, &file_name, &thumb_b64, duration_ms);
+}
+
+/// Shows an error toast with the raw Rust error message so failures (window
+/// lost, encode timeout, save failure, disk full, ...) are visible to the user.
+pub fn show_error_toast(app: &AppHandle, message: &str) {
+    show_toast(app, "ERROR", "CAPTURE FAILED", message, "", 5000);
+}
+
+fn show_toast(
+    app: &AppHandle,
+    mode_str: &str,
+    game_name: &str,
+    file_name: &str,
+    thumb_b64: &str,
+    duration_ms: u64,
+) {
     close_old_toasts(app);
 
     let id = format!("toast-{}", TOAST_COUNTER.fetch_add(1, Ordering::SeqCst));
@@ -73,7 +90,8 @@ pub fn show_toast_on_main(
 
     let mode = mode_str.to_string();
     let game = game_name.to_string();
-    let fname = file_name.clone();
+    let fname = file_name.to_string();
+    let thumb = thumb_b64.to_string();
 
     if let Ok(win) = builder.build() {
         let eval_script = format!(
@@ -81,7 +99,7 @@ pub fn show_toast_on_main(
             escape_js_string(&mode),
             escape_js_string(&game),
             escape_js_string(&fname),
-            thumb_b64,
+            escape_js_string(&thumb),
         );
 
         let win_for_eval = win.clone();

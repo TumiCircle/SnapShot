@@ -21,6 +21,8 @@ pub struct AppConfig {
     pub video_fps: u32,
     #[serde(default = "default_video_format")]
     pub video_format: String,
+    #[serde(default = "default_video_bitrate")]
+    pub video_bitrate: u32,
     #[serde(default = "default_mot_dur")]
     pub motion_duration: u32,
     #[serde(default = "default_mot_fps")]
@@ -72,6 +74,7 @@ fn default_quality() -> u8 { 90 }
 fn default_vid_dur() -> u32 { 3 }
 fn default_vid_fps() -> u32 { 30 }
 fn default_video_format() -> String { "mp4".to_string() }
+fn default_video_bitrate() -> u32 { 8_000_000 }
 fn default_mot_dur() -> u32 { 3 }
 fn default_mot_fps() -> u32 { 15 }
 fn default_motion_format() -> String { "gif".to_string() }
@@ -108,6 +111,7 @@ impl Default for AppConfig {
             video_duration: default_vid_dur(),
             video_fps: default_vid_fps(),
             video_format: default_video_format(),
+            video_bitrate: default_video_bitrate(),
             motion_duration: default_mot_dur(),
             motion_fps: default_mot_fps(),
             motion_format: default_motion_format(),
@@ -158,6 +162,7 @@ impl AppConfig {
             _ => "png".to_string(),
         };
         cfg.jpeg_quality = cfg.jpeg_quality.clamp(1, 100);
+        cfg.video_bitrate = cfg.video_bitrate.clamp(1_000_000, 20_000_000);
         Ok(cfg)
     }
 

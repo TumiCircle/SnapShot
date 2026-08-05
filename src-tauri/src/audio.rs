@@ -173,7 +173,7 @@ impl AudioCapture {
                 r
             };
             if let Err(e) = result {
-                eprintln!("[AUDIO] Capture loop error: {}", e);
+                crate::log_line!("[AUDIO] Capture loop error: {}", e);
                 let _ = init_tx.try_send(AudioInitResult::Failed(e));
             }
         });
@@ -281,7 +281,7 @@ unsafe fn run_capture_loop(
     }
     let fmt = parsed.unwrap();
 
-    eprintln!(
+    crate::log_line!(
         "[AUDIO] WASAPI format: {}Hz, {}ch, {}bit, float={}",
         fmt.sample_rate, fmt.channels, fmt.bits_per_sample, fmt.is_float
     );

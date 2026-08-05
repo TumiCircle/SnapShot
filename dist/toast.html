@@ -69,6 +69,7 @@ body.show{
 }
 .mt.video{background:#ffee78}
 .mt.motion{background:#ff6eb4}
+.mt.error{background:#ff4d6d}
 .gn{
   font-weight:bold;font-size:12px;
   color:#7fffd4;
@@ -88,6 +89,15 @@ body.show{
   font-weight:bold;
   letter-spacing:1px;
 }
+.st.error{
+  color:#ff4d6d;
+}
+.st.error .dt{
+  background:#ff4d6d;
+  box-shadow:
+    inset -2px -2px 0 #8f1f36,
+    inset 2px 2px 0 #ff9db1;
+}
 .dt{
   width:8px;height:8px;
   background:#7fffd4;
@@ -101,7 +111,7 @@ body.show{
 }
 </style></head><body>
 <div class="t"><div class="th"><img id="thumb" src=""></div>
-<div class="in"><div class="mt" id="mode">SNAP IMAGE</div><div class="gn" id="game"></div><div class="fn" id="file"></div><div class="st"><span class="dt"></span>COMPLETED!</div></div></div>
+<div class="in"><div class="mt" id="mode">SNAP IMAGE</div><div class="gn" id="game"></div><div class="fn" id="file"></div><div class="st" id="status"><span class="dt"></span><span id="status-text">COMPLETED!</span></div></div></div>
 <script>
 window.__setToastData = function(mode, game, fname, thumbB64) {
   var modeEl = document.getElementById('mode');
@@ -111,13 +121,16 @@ window.__setToastData = function(mode, game, fname, thumbB64) {
   var modeMap = {
     'VIDEO': { cls: 'video', label: '\u25B6 VIDEO' },
     'MOTION': { cls: 'motion', label: '\u2726 MOTION' },
-    'IMAGE': { cls: '', label: 'SNAP IMAGE' }
+    'IMAGE': { cls: '', label: 'SNAP IMAGE' },
+    'ERROR': { cls: 'error', label: '\u0021 ERROR' }
   };
   var mi = modeMap[mode] || modeMap['IMAGE'];
   modeEl.textContent = mi.label;
   modeEl.className = 'mt' + (mi.cls ? ' ' + mi.cls : '');
   gameEl.textContent = game;
   fileEl.textContent = fname;
+  document.getElementById('status-text').textContent = mode === 'ERROR' ? 'FAILED!' : 'COMPLETED!';
+  document.getElementById('status').className = 'st' + (mode === 'ERROR' ? ' error' : '');
   thumbEl.src = 'data:image/png;base64,' + thumbB64;
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){ document.body.classList.add('show'); });

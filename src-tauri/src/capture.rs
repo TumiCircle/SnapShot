@@ -37,13 +37,16 @@ use windows_capture::{
 };
 
 const TICKS_PER_SECOND: i64 = 10_000_000;
-const VIDEO_BITRATE: u32 = 8_000_000;
 const AUDIO_BUF_CAPACITY: usize = 65536;
 const CAPTURE_TIMEOUT_SECS: u64 = 120;
 const POLL_INTERVAL_MS: u64 = 20;
 const IMAGE_POST_CAPTURE_WAIT_MS: u64 = 150;
 const GIF_POST_CAPTURE_WAIT_MS: u64 = 300;
 const FIRST_FRAME_TIMEOUT_SECS: u64 = 5;
+
+/// Set by the frontend/hotkey when the user asks to stop the current
+/// recording early. Video/GIF capture loops poll this and finalize the file.
+pub static STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone)]
 pub enum CaptureTarget {
@@ -90,6 +93,7 @@ struct CaptureParams {
     save_thumbnail: bool,
     record_audio: bool,
     audio_bitrate: u32,
+    video_bitrate: u32,
     result: Arc<Mutex<Option<CaptureResultInternal>>>,
 }
 
@@ -106,20 +110,25 @@ struct MonitorCaptureParams {
     save_thumbnail: bool,
     record_audio: bool,
     audio_bitrate: u32,
+    video_bitrate: u32,
     result: Arc<Mutex<Option<CaptureResultInternal>>>,
 }
 
 enum CaptureResultInternal {
     Image { img: RgbaImage, thumbnail: Option<Vec<u8>> },
-    Gif { frames: Vec<RgbaImage>, thumbnail: Option<Vec<u8>> },
+    Gif { frame_count: usize, thumbnail: Option<Vec<u8>> },
     VideoDone { thumbnail: Option<Vec<u8>> },
     Error(String),
 }
 
 enum SaveData {
     Image { img: RgbaImage, format: String, quality: u8 },
-    Gif { frames: Vec<RgbaImage>, fps: u32 },
-    Video { file_path: PathBuf },
+    File { file_path: PathBuf },
+}
+
+enum GifMsg {
+    NewFrame(RgbaImage),
+    Stop,
 }
 
 type CaptureResult = Arc<Mutex<Option<CaptureResultInternal>>>;
@@ -547,6 +556,7 @@ struct VideoShared {
     thumbnail: StdMutex<Option<Vec<u8>>>,
     first_frame_ready: AtomicBool,
     stop_requested: Arc<AtomicBool>,
+    early_stop: Arc<AtomicBool>,
     result: CaptureResult,
 }
 
@@ -573,11 +583,11 @@ fn spawn_video_encoding_thread(
         let (audio_capture, audio_rx) = if record_audio {
             match crate::audio::AudioCapture::start() {
                 Ok((cap, rx)) => {
-                    eprintln!("[AUDIO] Capture started");
+                    crate::log_line!("[AUDIO] Capture started");
                     (Some(cap), Some(rx))
                 }
                 Err(e) => {
-                    eprintln!("[AUDIO] Failed to start: {}", e);
+                    crate::log_line!("[AUDIO] Failed to start: {}", e);
                     (None, None)
                 }
             }
@@ -595,7 +605,7 @@ fn spawn_video_encoding_thread(
         }
 
         let start_instant = Instant::now();
-        eprintln!("[VIDEO] Encoding thread started at wall-clock, fps={}, dur={}s", fps, duration_secs);
+        crate::log_line!("[VIDEO] Encoding thread started at wall-clock, fps={}, dur={}s", fps, duration_secs);
 
         // QPC snapshot at the moment the video timeline starts. Audio packets
         // carrying an older QPC were captured before the first frame and are
@@ -688,7 +698,7 @@ fn spawn_video_encoding_thread(
         // Catch up any frames that were due but not yet sent (e.g. scheduler
         // hiccups), so the file always contains exactly duration*fps frames
         // with a final frame ending precisely at the requested duration.
-        while sent_frames < total_frames {
+        while sent_frames < total_frames && !shared.early_stop.load(Ordering::SeqCst) {
             let pts = frame_timestamp(sent_frames, fps);
             {
                 let frame_guard = shared.latest_frame.lock().unwrap();
@@ -744,11 +754,11 @@ fn spawn_video_encoding_thread(
         drop(audio_capture);
 
         // Finish encoding (blocks until file is finalized)
-        eprintln!("[VIDEO] Finalizing encoder, sent {} frames (target ~{} frames)",
+        crate::log_line!("[VIDEO] Finalizing encoder, sent {} frames (target ~{} frames)",
             sent_frames, total_frames);
         let finish_start = Instant::now();
         let _ = encoder.finish();
-        eprintln!("[VIDEO] Encoder finished in {:.1}s", finish_start.elapsed().as_secs_f64());
+        crate::log_line!("[VIDEO] Encoder finished in {:.1}s", finish_start.elapsed().as_secs_f64());
 
         // Write thumbnail and set result
         let thumb_data = shared.thumbnail.lock().unwrap().clone();
@@ -856,15 +866,16 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
 
     let result = params.result.clone();
     let stop_requested = Arc::new(AtomicBool::new(false));
+    let early_stop = Arc::new(AtomicBool::new(false));
 
     let audio_format = if params.record_audio {
         match crate::audio::AudioCapture::init_format() {
             Ok(fmt) => {
-                eprintln!("[AUDIO] Format detected: {}Hz, {}ch", fmt.sample_rate, fmt.channels);
+                crate::log_line!("[AUDIO] Format detected: {}Hz, {}ch", fmt.sample_rate, fmt.channels);
                 Some(fmt)
             }
             Err(e) => {
-                eprintln!("[AUDIO] Failed to detect format (video-only): {}", e);
+                crate::log_line!("[AUDIO] Failed to detect format (video-only): {}", e);
                 None
             }
         }
@@ -881,7 +892,7 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
                 .bit_per_sample(16)
                 .sub_type(AudioSettingsSubType::AAC),
             None => {
-                eprintln!("[AUDIO] No audio format available, recording video only");
+                crate::log_line!("[AUDIO] No audio format available, recording video only");
                 AudioSettingsBuilder::new().disabled(true)
             }
         }
@@ -892,7 +903,7 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
     let encoder = VideoEncoder::new(
         VideoSettingsBuilder::new(params.crop_w, params.crop_h)
             .sub_type(VideoSettingsSubType::H264)
-            .bitrate(VIDEO_BITRATE)
+            .bitrate(params.video_bitrate)
             .frame_rate(params.fps),
         audio_settings,
         ContainerSettingsBuilder::new().sub_type(ContainerSettingsSubType::MPEG4),
@@ -904,6 +915,7 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
         thumbnail: StdMutex::new(None),
         first_frame_ready: AtomicBool::new(false),
         stop_requested: stop_requested.clone(),
+        early_stop: early_stop.clone(),
         result: result.clone(),
     });
 
@@ -947,6 +959,11 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
     let wait_start = Instant::now();
 
     loop {
+        if STOP_REQUESTED.load(Ordering::SeqCst) {
+            stop_requested.store(true, Ordering::SeqCst);
+            early_stop.store(true, Ordering::SeqCst);
+            break;
+        }
         {
             let res = result.lock().unwrap();
             if let Some(r) = res.as_ref() {
@@ -997,17 +1014,12 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
 }
 
 fn run_gif_capture(params: CaptureParams) -> Result<CaptureResultInternal, String> {
-    enum GifMsg {
-        NewFrame(RgbaImage),
-        Stop,
-    }
-
     struct GifHandlerData {
         tx: mpsc::Sender<GifMsg>,
         result: CaptureResult,
         stop_flag: Arc<AtomicBool>,
         thumb_size: u32,
-        thumbnail: Mutex<Option<Vec<u8>>>,
+        thumbnail: Arc<Mutex<Option<Vec<u8>>>>,
         crop: (u32, u32, u32, u32),
     }
 
@@ -1059,95 +1071,21 @@ fn run_gif_capture(params: CaptureParams) -> Result<CaptureResultInternal, Strin
         result: params.result.clone(),
         stop_flag: stop_flag.clone(),
         thumb_size: params.thumb_size,
-        thumbnail: Mutex::new(None),
+        thumbnail: Arc::new(Mutex::new(None)),
         crop: (params.crop_x, params.crop_y, params.crop_w, params.crop_h),
     });
 
-    let result_collect = params.result.clone();
-    let stop_collect = stop_flag.clone();
-    let thumb_path = params.thumb_path.clone();
-    let save_thumbnail = params.save_thumbnail;
-    let handler_data_collect = handler_data.clone();
-    let fps = params.fps;
-    let duration_secs = params.duration_secs;
-
-    let collect_thread = std::thread::spawn(move || {
-        let mut last_rgba: Option<RgbaImage> = None;
-        let mut frames: Vec<RgbaImage> = Vec::new();
-        let mut collect_start: Option<Instant> = None;
-        let thread_start = Instant::now();
-        let total_frames = duration_secs * fps as u64;
-        let nanos_per_frame = 1_000_000_000u64 / fps as u64;
-        let first_frame_timeout = Duration::from_secs(FIRST_FRAME_TIMEOUT_SECS);
-
-        for frame_idx in 0..total_frames {
-            'inner: loop {
-                if stop_collect.load(Ordering::SeqCst) {
-                    break 'inner;
-                }
-                if is_result_set(&result_collect) {
-                    break 'inner;
-                }
-
-                while let Ok(msg) = rx.try_recv() {
-                    match msg {
-                        GifMsg::NewFrame(rgba) => {
-                            if collect_start.is_none() {
-                                collect_start = Some(Instant::now());
-                            }
-                            last_rgba = Some(rgba);
-                        }
-                        GifMsg::Stop => stop_collect.store(true, Ordering::SeqCst),
-                    }
-                }
-
-                if last_rgba.is_none() {
-                    if thread_start.elapsed() > first_frame_timeout {
-                        set_error(&result_collect, "Timed out waiting for first GIF frame".to_string());
-                        break 'inner;
-                    }
-                    std::thread::sleep(Duration::from_millis(1));
-                    continue;
-                }
-
-                if let Some(frame) = &last_rgba {
-                    frames.push(frame.clone());
-                    break 'inner;
-                }
-
-                std::thread::sleep(Duration::from_millis(1));
-            }
-
-            if stop_collect.load(Ordering::SeqCst) {
-                break;
-            }
-            if is_result_set(&result_collect) {
-                break;
-            }
-
-            if frame_idx < total_frames - 1 {
-                if let Some(start) = collect_start {
-                    let target = start + Duration::from_nanos((frame_idx as u64 + 1) * nanos_per_frame);
-                    if let Some(wait) = target.checked_duration_since(Instant::now()) {
-                        std::thread::sleep(wait);
-                    }
-                }
-            }
-        }
-
-        let thumb_data = handler_data_collect.thumbnail.lock().unwrap().clone();
-        write_thumbnail(&thumb_data, &thumb_path, save_thumbnail);
-
-        let mut res = result_collect.lock().unwrap();
-        if res.is_none() {
-            if frames.len() >= 2 {
-                *res = Some(CaptureResultInternal::Gif { frames, thumbnail: thumb_data });
-            } else {
-                *res = Some(CaptureResultInternal::Error("Not enough frames captured".to_string()));
-            }
-        }
-        stop_collect.store(true, Ordering::SeqCst);
-    });
+    let collect_thread = run_gif_collector(
+        rx,
+        params.result.clone(),
+        stop_flag.clone(),
+        handler_data.thumbnail.clone(),
+        params.thumb_path.clone(),
+        params.save_thumbnail,
+        params.file_path.clone(),
+        params.fps,
+        params.duration_secs,
+    );
 
     let result = params.result.clone();
     let window = params.window.clone();
@@ -1165,6 +1103,11 @@ fn run_gif_capture(params: CaptureParams) -> Result<CaptureResultInternal, Strin
         .map_err(|e| format!("Failed to start GIF capture: {:?}", e))?;
 
     loop {
+        if STOP_REQUESTED.load(Ordering::SeqCst) {
+            stop_flag.store(true, Ordering::SeqCst);
+            let _ = tx.send(GifMsg::Stop);
+            break;
+        }
         {
             let res = result.lock().unwrap();
             if let Some(r) = res.as_ref() {
@@ -1176,7 +1119,7 @@ fn run_gif_capture(params: CaptureParams) -> Result<CaptureResultInternal, Strin
                         let _ = collect_thread.join();
                         return Err(e.clone());
                     }
-                    CaptureResultInternal::Gif { frames, .. } if frames.len() >= 2 => break,
+                    CaptureResultInternal::Gif { frame_count, .. } if *frame_count >= 2 => break,
                     CaptureResultInternal::Gif { .. } => {
                         std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
                         continue;
@@ -1196,8 +1139,8 @@ fn run_gif_capture(params: CaptureParams) -> Result<CaptureResultInternal, Strin
 
     let mut res = result.lock().unwrap();
     match res.take() {
-        Some(CaptureResultInternal::Gif { frames, thumbnail }) if frames.len() >= 2 => {
-            Ok(CaptureResultInternal::Gif { frames, thumbnail })
+        Some(CaptureResultInternal::Gif { frame_count, thumbnail }) if frame_count >= 2 => {
+            Ok(CaptureResultInternal::Gif { frame_count, thumbnail })
         }
         Some(CaptureResultInternal::Error(e)) => Err(e),
         _ => Err("GIF capture failed: not enough frames".to_string()),
@@ -1370,15 +1313,16 @@ fn run_monitor_video_capture(params: MonitorCaptureParams) -> Result<CaptureResu
 
     let result = params.result.clone();
     let stop_requested = Arc::new(AtomicBool::new(false));
+    let early_stop = Arc::new(AtomicBool::new(false));
 
     let audio_format = if params.record_audio {
         match crate::audio::AudioCapture::init_format() {
             Ok(fmt) => {
-                eprintln!("[AUDIO] Monitor format: {}Hz, {}ch", fmt.sample_rate, fmt.channels);
+                crate::log_line!("[AUDIO] Monitor format: {}Hz, {}ch", fmt.sample_rate, fmt.channels);
                 Some(fmt)
             }
             Err(e) => {
-                eprintln!("[AUDIO] Monitor failed to detect format: {}", e);
+                crate::log_line!("[AUDIO] Monitor failed to detect format: {}", e);
                 None
             }
         }
@@ -1403,7 +1347,7 @@ fn run_monitor_video_capture(params: MonitorCaptureParams) -> Result<CaptureResu
     let encoder = VideoEncoder::new(
         VideoSettingsBuilder::new(params.width, params.height)
             .sub_type(VideoSettingsSubType::H264)
-            .bitrate(VIDEO_BITRATE)
+            .bitrate(params.video_bitrate)
             .frame_rate(params.fps),
         audio_settings,
         ContainerSettingsBuilder::new().sub_type(ContainerSettingsSubType::MPEG4),
@@ -1415,6 +1359,7 @@ fn run_monitor_video_capture(params: MonitorCaptureParams) -> Result<CaptureResu
         thumbnail: StdMutex::new(None),
         first_frame_ready: AtomicBool::new(false),
         stop_requested: stop_requested.clone(),
+        early_stop: early_stop.clone(),
         result: result.clone(),
     });
 
@@ -1456,6 +1401,11 @@ fn run_monitor_video_capture(params: MonitorCaptureParams) -> Result<CaptureResu
     let wait_start = Instant::now();
 
     loop {
+        if STOP_REQUESTED.load(Ordering::SeqCst) {
+            stop_requested.store(true, Ordering::SeqCst);
+            early_stop.store(true, Ordering::SeqCst);
+            break;
+        }
         {
             let res = result.lock().unwrap();
             if let Some(r) = res.as_ref() {
@@ -1503,17 +1453,12 @@ fn run_monitor_video_capture(params: MonitorCaptureParams) -> Result<CaptureResu
 }
 
 fn run_monitor_gif_capture(params: MonitorCaptureParams) -> Result<CaptureResultInternal, String> {
-    enum GifMsg {
-        NewFrame(RgbaImage),
-        Stop,
-    }
-
     struct GifHandlerData {
         tx: mpsc::Sender<GifMsg>,
         result: CaptureResult,
         stop_flag: Arc<AtomicBool>,
         thumb_size: u32,
-        thumbnail: Mutex<Option<Vec<u8>>>,
+        thumbnail: Arc<Mutex<Option<Vec<u8>>>>,
         dims: (u32, u32),
     }
 
@@ -1565,95 +1510,21 @@ fn run_monitor_gif_capture(params: MonitorCaptureParams) -> Result<CaptureResult
         result: params.result.clone(),
         stop_flag: stop_flag.clone(),
         thumb_size: params.thumb_size,
-        thumbnail: Mutex::new(None),
+        thumbnail: Arc::new(Mutex::new(None)),
         dims: (params.width, params.height),
     });
 
-    let result_collect = params.result.clone();
-    let stop_collect = stop_flag.clone();
-    let thumb_path = params.thumb_path.clone();
-    let save_thumbnail = params.save_thumbnail;
-    let handler_data_collect = handler_data.clone();
-    let fps = params.fps;
-    let duration_secs = params.duration_secs;
-
-    let collect_thread = std::thread::spawn(move || {
-        let mut last_rgba: Option<RgbaImage> = None;
-        let mut frames: Vec<RgbaImage> = Vec::new();
-        let mut collect_start: Option<Instant> = None;
-        let thread_start = Instant::now();
-        let total_frames = duration_secs * fps as u64;
-        let nanos_per_frame = 1_000_000_000u64 / fps as u64;
-        let first_frame_timeout = Duration::from_secs(FIRST_FRAME_TIMEOUT_SECS);
-
-        for frame_idx in 0..total_frames {
-            'inner: loop {
-                if stop_collect.load(Ordering::SeqCst) {
-                    break 'inner;
-                }
-                if is_result_set(&result_collect) {
-                    break 'inner;
-                }
-
-                while let Ok(msg) = rx.try_recv() {
-                    match msg {
-                        GifMsg::NewFrame(rgba) => {
-                            if collect_start.is_none() {
-                                collect_start = Some(Instant::now());
-                            }
-                            last_rgba = Some(rgba);
-                        }
-                        GifMsg::Stop => stop_collect.store(true, Ordering::SeqCst),
-                    }
-                }
-
-                if last_rgba.is_none() {
-                    if thread_start.elapsed() > first_frame_timeout {
-                        set_error(&result_collect, "Timed out waiting for first GIF frame".to_string());
-                        break 'inner;
-                    }
-                    std::thread::sleep(Duration::from_millis(1));
-                    continue;
-                }
-
-                if let Some(frame) = &last_rgba {
-                    frames.push(frame.clone());
-                    break 'inner;
-                }
-
-                std::thread::sleep(Duration::from_millis(1));
-            }
-
-            if stop_collect.load(Ordering::SeqCst) {
-                break;
-            }
-            if is_result_set(&result_collect) {
-                break;
-            }
-
-            if frame_idx < total_frames - 1 {
-                if let Some(start) = collect_start {
-                    let target = start + Duration::from_nanos((frame_idx as u64 + 1) * nanos_per_frame);
-                    if let Some(wait) = target.checked_duration_since(Instant::now()) {
-                        std::thread::sleep(wait);
-                    }
-                }
-            }
-        }
-
-        let thumb_data = handler_data_collect.thumbnail.lock().unwrap().clone();
-        write_thumbnail(&thumb_data, &thumb_path, save_thumbnail);
-
-        let mut res = result_collect.lock().unwrap();
-        if res.is_none() {
-            if frames.len() >= 2 {
-                *res = Some(CaptureResultInternal::Gif { frames, thumbnail: thumb_data });
-            } else {
-                *res = Some(CaptureResultInternal::Error("Not enough frames captured".to_string()));
-            }
-        }
-        stop_collect.store(true, Ordering::SeqCst);
-    });
+    let collect_thread = run_gif_collector(
+        rx,
+        params.result.clone(),
+        stop_flag.clone(),
+        handler_data.thumbnail.clone(),
+        params.thumb_path.clone(),
+        params.save_thumbnail,
+        params.file_path.clone(),
+        params.fps,
+        params.duration_secs,
+    );
 
     let result = params.result.clone();
     let monitor = params.monitor.clone();
@@ -1671,6 +1542,11 @@ fn run_monitor_gif_capture(params: MonitorCaptureParams) -> Result<CaptureResult
         .map_err(|e| format!("Failed to start monitor GIF capture: {:?}", e))?;
 
     loop {
+        if STOP_REQUESTED.load(Ordering::SeqCst) {
+            stop_flag.store(true, Ordering::SeqCst);
+            let _ = tx.send(GifMsg::Stop);
+            break;
+        }
         {
             let res = result.lock().unwrap();
             if let Some(r) = res.as_ref() {
@@ -1682,7 +1558,7 @@ fn run_monitor_gif_capture(params: MonitorCaptureParams) -> Result<CaptureResult
                         let _ = collect_thread.join();
                         return Err(e.clone());
                     }
-                    CaptureResultInternal::Gif { frames, .. } if frames.len() >= 2 => break,
+                    CaptureResultInternal::Gif { frame_count, .. } if *frame_count >= 2 => break,
                     CaptureResultInternal::Gif { .. } => {
                         std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
                         continue;
@@ -1702,8 +1578,8 @@ fn run_monitor_gif_capture(params: MonitorCaptureParams) -> Result<CaptureResult
 
     let mut res = result.lock().unwrap();
     match res.take() {
-        Some(CaptureResultInternal::Gif { frames, thumbnail }) if frames.len() >= 2 => {
-            Ok(CaptureResultInternal::Gif { frames, thumbnail })
+        Some(CaptureResultInternal::Gif { frame_count, thumbnail }) if frame_count >= 2 => {
+            Ok(CaptureResultInternal::Gif { frame_count, thumbnail })
         }
         Some(CaptureResultInternal::Error(e)) => Err(e),
         _ => Err("GIF capture failed: not enough frames".to_string()),
@@ -1753,7 +1629,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
     let mode = mode_override.unwrap_or(&cfg.mode).to_string();
     std::thread::spawn(move || {
         let target = unsafe { auto_detect_target() };
-        eprintln!("[CAPTURE-DEBUG] Capture thread started for mode: {}, target: {:?}", mode, target);
+        crate::log_line!("[CAPTURE-DEBUG] Capture thread started for mode: {}, target: {:?}", mode, target);
 
         enum CaptureSource {
             Window(WindowInfo, String),
@@ -1852,6 +1728,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                         save_thumbnail: cfg.save_thumbnail,
                         record_audio: false,
                         audio_bitrate: 0,
+                        video_bitrate: 0,
                         result: make_result(),
                     })
                 }
@@ -1872,6 +1749,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                         save_thumbnail: cfg.save_thumbnail,
                         record_audio: false,
                         audio_bitrate: 0,
+                        video_bitrate: 0,
                         result: make_result(),
                     })
                 }
@@ -1892,6 +1770,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                         save_thumbnail: cfg.save_thumbnail,
                         record_audio: cfg.record_system_audio,
                         audio_bitrate: cfg.audio_bitrate,
+                        video_bitrate: cfg.video_bitrate,
                         result: make_result(),
                     })
                 }
@@ -1937,6 +1816,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                     save_thumbnail: cfg.save_thumbnail,
                     record_audio: rec_audio,
                     audio_bitrate: cfg.audio_bitrate,
+                    video_bitrate: cfg.video_bitrate,
                     result: make_result(),
                 }
             };
@@ -1977,21 +1857,19 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                             "jpg" | "jpeg" => "jpg",
                             _ => "png",
                         };
-                        eprintln!("[CAPTURE] Image captured, cfg.image_format='{}', ext='{}'", cfg.image_format, ext);
+                        crate::log_line!("[CAPTURE] Image captured, cfg.image_format='{}', ext='{}'", cfg.image_format, ext);
                         let fp = base_dir.join(build_filename(&cfg.filename_prefix, "image", &timestamp, &unique, ext));
                         ("IMAGE", SaveData::Image {
                             img, format: cfg.image_format.clone(), quality: cfg.jpeg_quality,
                         }, fp, thumbnail)
                     }
-                    CaptureResultInternal::Gif { frames, thumbnail } => {
+                    CaptureResultInternal::Gif { frame_count: _, thumbnail } => {
                         let fp = base_dir.join(build_filename(&cfg.filename_prefix, "motion", &timestamp, &unique, "gif"));
-                        ("MOTION", SaveData::Gif {
-                            frames, fps: cfg.motion_fps.max(5).min(20),
-                        }, fp, thumbnail)
+                        ("MOTION", SaveData::File { file_path: fp.clone() }, fp, thumbnail)
                     }
                     CaptureResultInternal::VideoDone { thumbnail } => {
                         let fp = base_dir.join(build_filename(&cfg.filename_prefix, "video", &timestamp, &unique, "mp4"));
-                        ("VIDEO", SaveData::Video { file_path: fp.clone() }, fp, thumbnail)
+                        ("VIDEO", SaveData::File { file_path: fp.clone() }, fp, thumbnail)
                     }
                     CaptureResultInternal::Error(e) => {
                         on_event(CaptureEvent::Error(e));
@@ -2009,8 +1887,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
 
                 let save_result = match save_data {
                     SaveData::Image { img, format, quality } => save_image(&img, &final_path, &format, quality),
-                    SaveData::Gif { frames, fps } => save_gif_fast(&frames, &final_path, fps),
-                    SaveData::Video { file_path } => {
+                    SaveData::File { file_path } => {
                         if file_path.exists() { Ok(()) }
                         else { Err("Video file was not created".to_string()) }
                     }
@@ -2040,7 +1917,7 @@ fn save_image(img: &RgbaImage, path: &PathBuf, format: &str, quality: u8) -> Res
         _ => "png",
     };
 
-    eprintln!(
+    crate::log_line!(
         "[SAVE_IMAGE] format='{}' ext='{}' using='{}' path='{}'",
         format, ext_format, normalized_format, path.display()
     );
@@ -2069,37 +1946,44 @@ fn save_image(img: &RgbaImage, path: &PathBuf, format: &str, quality: u8) -> Res
     Ok(())
 }
 
-fn save_gif_fast(frames: &[RgbaImage], path: &PathBuf, fps: u32) -> Result<(), String> {
-    if frames.is_empty() {
-        return Err("No frames to encode".to_string());
-    }
+// ============ Streaming GIF encoding ============
 
-    let (width, height) = frames[0].dimensions();
-    if width == 0 || height == 0 || width > u16::MAX as u32 || height > u16::MAX as u32 {
-        return Err("Invalid GIF dimensions".to_string());
-    }
+/// Number of full-resolution frames buffered up front while the global
+/// palette is trained. Memory is bounded by this constant instead of growing
+/// with the total frame count.
+const GIF_WARMUP_FRAMES: usize = 8;
+/// Palette colors used for opaque pixels; index 255 is reserved for
+/// transparency so the GIF still supports transparent pixels.
+const GIF_PALETTE_COLORS: usize = 255;
+const GIF_TRAIN_MAX_DIM: u32 = 160;
 
-    // Build one global 256-color palette from a downscaled sample of every
-    // frame. This avoids the extremely slow per-frame NeuQuant pass of the
-    // image crate (default speed=1) and keeps colors consistent across frames.
-    const PALETTE_COLORS: usize = 255; // last slot reserved for transparency
-    let sample = build_gif_palette_sample(frames, 160);
-    let nq = color_quant::NeuQuant::new(10, PALETTE_COLORS, &sample);
+/// Appends a downscaled copy of `frame` to the palette training sample.
+fn append_gif_training_sample(training: &mut Vec<u8>, frame: &RgbaImage) {
+    let (w, h) = frame.dimensions();
+    let scale = (GIF_TRAIN_MAX_DIM as f32) / (w.max(h) as f32);
+    let tw = ((w as f32 * scale) as u32).max(1);
+    let th = ((h as f32 * scale) as u32).max(1);
+    let thumb = image::imageops::resize(frame, tw, th, image::imageops::FilterType::Triangle);
+    training.extend_from_slice(thumb.as_raw());
+}
+
+/// Trains one global 256-color palette and builds a 32^3 lookup table that
+/// maps quantized RGB values to palette indices in a single table lookup.
+fn build_gif_palette_and_lut(training: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    let nq = color_quant::NeuQuant::new(10, GIF_PALETTE_COLORS, training);
     let mut palette_rgb = nq.color_map_rgb();
     palette_rgb.extend_from_slice(&[0u8, 0, 0]); // index 255 = transparent
 
-    // 32^3 lookup table: quantized RGB -> nearest palette index. Per-pixel
-    // mapping is then a single table lookup instead of a color search.
     let mut lut = vec![0u8; 32 * 32 * 32];
     for r in 0..32u16 {
         for g in 0..32u16 {
             for b in 0..32u16 {
-                let cr = (r << 3) as i32 | (r >> 2) as i32; // expand 5-bit to 8-bit
+                let cr = (r << 3) as i32 | (r >> 2) as i32;
                 let cg = (g << 3) as i32 | (g >> 2) as i32;
                 let cb = (b << 3) as i32 | (b >> 2) as i32;
                 let mut best = 0usize;
                 let mut best_dist = i32::MAX;
-                for (i, entry) in palette_rgb[..PALETTE_COLORS * 3].chunks_exact(3).enumerate() {
+                for (i, entry) in palette_rgb[..GIF_PALETTE_COLORS * 3].chunks_exact(3).enumerate() {
                     let dr = cr - entry[0] as i32;
                     let dg = cg - entry[1] as i32;
                     let db = cb - entry[2] as i32;
@@ -2113,63 +1997,257 @@ fn save_gif_fast(frames: &[RgbaImage], path: &PathBuf, fps: u32) -> Result<(), S
             }
         }
     }
+    (palette_rgb, lut)
+}
 
-    let file = fs::File::create(path).map_err(|e| e.to_string())?;
-    let writer = std::io::BufWriter::new(file);
-    let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[])
-        .map_err(|e| format!("GIF encoder init error: {}", e))?;
-    encoder
-        .set_repeat(gif::Repeat::Infinite)
-        .map_err(|e| e.to_string())?;
-    let frame_delay_cs = (1000 / fps.max(1) / 10).max(1) as u16;
+/// Incrementally writes animation frames to a GIF file as they arrive.
+struct GifStreamWriter {
+    encoder: Option<gif::Encoder<std::io::BufWriter<std::fs::File>>>,
+    palette_rgb: Vec<u8>,
+    lut: Vec<u8>,
+    width: u16,
+    height: u16,
+    delay_cs: u16,
+    frames_written: u64,
+}
 
-    for frame in frames {
-        if frame.dimensions() != (width, height) {
+impl GifStreamWriter {
+    fn new(
+        path: &PathBuf,
+        width: u32,
+        height: u32,
+        palette_rgb: Vec<u8>,
+        lut: Vec<u8>,
+        fps: u32,
+    ) -> Result<Self, String> {
+        if width == 0 || height == 0 || width > u16::MAX as u32 || height > u16::MAX as u32 {
+            return Err("Invalid GIF dimensions".to_string());
+        }
+        let file = fs::File::create(path).map_err(|e| e.to_string())?;
+        let writer = std::io::BufWriter::new(file);
+        let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[])
+            .map_err(|e| format!("GIF encoder init error: {}", e))?;
+        encoder
+            .set_repeat(gif::Repeat::Infinite)
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            encoder: Some(encoder),
+            palette_rgb,
+            lut,
+            width: width as u16,
+            height: height as u16,
+            delay_cs: (1000 / fps.max(1) / 10).max(1) as u16,
+            frames_written: 0,
+        })
+    }
+
+    fn write_frame(&mut self, frame: &RgbaImage) -> Result<(), String> {
+        let (w, h) = frame.dimensions();
+        if w != self.width as u32 || h != self.height as u32 {
             return Err("GIF frames have inconsistent dimensions".to_string());
         }
-
-        let mut indices = Vec::with_capacity((width * height) as usize);
-        let mut transparent: Option<u8> = None;
+        let mut indices = Vec::with_capacity((w * h) as usize);
+        let mut transparent = None;
         for p in frame.pixels() {
             if p[3] == 0 {
-                transparent.get_or_insert(PALETTE_COLORS as u8);
-                indices.push(PALETTE_COLORS as u8);
+                transparent.get_or_insert(GIF_PALETTE_COLORS as u8);
+                indices.push(GIF_PALETTE_COLORS as u8);
             } else {
                 let key = (((p[0] >> 3) as usize) << 10)
                     | (((p[1] >> 3) as usize) << 5)
                     | ((p[2] >> 3) as usize);
-                indices.push(lut[key]);
+                indices.push(self.lut[key]);
             }
         }
-
-        let mut gif_frame =
-            gif::Frame::from_palette_pixels(width as u16, height as u16, indices, palette_rgb.clone(), transparent);
-        gif_frame.delay = frame_delay_cs;
+        let mut gif_frame = gif::Frame::from_palette_pixels(
+            self.width,
+            self.height,
+            indices,
+            self.palette_rgb.clone(),
+            transparent,
+        );
+        gif_frame.delay = self.delay_cs;
         gif_frame.dispose = gif::DisposalMethod::Background;
-        encoder.write_frame(&gif_frame).map_err(|e| e.to_string())?;
+        if let Some(enc) = self.encoder.as_mut() {
+            enc.write_frame(&gif_frame).map_err(|e| e.to_string())?;
+        }
+        self.frames_written += 1;
+        Ok(())
     }
+
+    fn finish(&mut self) {
+        // Dropping the encoder writes the GIF trailer and flushes the writer.
+        if let Some(enc) = self.encoder.take() {
+            drop(enc);
+        }
+    }
+}
+
+fn init_gif_stream(
+    writer: &mut Option<GifStreamWriter>,
+    warmup: &mut Vec<RgbaImage>,
+    training: &[u8],
+    dims: (u32, u32),
+    fps: u32,
+    file_path: &PathBuf,
+) -> Result<(), String> {
+    if writer.is_some() {
+        return Ok(());
+    }
+    let (palette_rgb, lut) = build_gif_palette_and_lut(training);
+    let mut w = GifStreamWriter::new(file_path, dims.0, dims.1, palette_rgb, lut, fps)?;
+    for frame in warmup.iter() {
+        w.write_frame(frame)?;
+    }
+    warmup.clear();
+    *writer = Some(w);
     Ok(())
 }
 
-/// Downscales all frames into one RGBA sample buffer used to train the global
-/// GIF palette. Small sample keeps palette training fast while still being
-/// representative of the whole animation.
-fn build_gif_palette_sample(frames: &[RgbaImage], max_dim: u32) -> Vec<u8> {
-    let mut sample = Vec::with_capacity(frames.len() * max_dim as usize * max_dim as usize * 4);
-    for frame in frames {
-        let (w, h) = frame.dimensions();
-        let scale = (max_dim as f32) / (w.max(h) as f32);
-        let tw = ((w as f32 * scale) as u32).max(1);
-        let th = ((h as f32 * scale) as u32).max(1);
-        let thumb = image::imageops::resize(
-            frame,
-            tw,
-            th,
-            image::imageops::FilterType::Triangle,
-        );
-        sample.extend_from_slice(thumb.as_raw());
-    }
-    sample
+/// Shared collector for window and monitor GIF captures. Encodes frames into
+/// the GIF file as they arrive: the first `GIF_WARMUP_FRAMES` frames are
+/// buffered to train one global palette, then every following frame is written
+/// immediately. Memory stays bounded regardless of recording length.
+fn run_gif_collector(
+    rx: mpsc::Receiver<GifMsg>,
+    result: CaptureResult,
+    stop_flag: Arc<AtomicBool>,
+    thumbnail: Arc<Mutex<Option<Vec<u8>>>>,
+    thumb_path: PathBuf,
+    save_thumbnail: bool,
+    file_path: PathBuf,
+    fps: u32,
+    duration_secs: u64,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut last_rgba: Option<RgbaImage> = None;
+        let mut warmup: Vec<RgbaImage> = Vec::with_capacity(GIF_WARMUP_FRAMES);
+        let mut training: Vec<u8> = Vec::new();
+        let mut writer: Option<GifStreamWriter> = None;
+        let mut first_dims: Option<(u32, u32)> = None;
+        let mut collect_start: Option<Instant> = None;
+        let thread_start = Instant::now();
+        let total_frames = duration_secs * fps as u64;
+        let nanos_per_frame = 1_000_000_000u64 / fps as u64;
+        let first_frame_timeout = Duration::from_secs(FIRST_FRAME_TIMEOUT_SECS);
+        let mut encode_error: Option<String> = None;
+
+        for frame_idx in 0..total_frames {
+            'inner: loop {
+                if stop_flag.load(Ordering::SeqCst) {
+                    break 'inner;
+                }
+                if is_result_set(&result) {
+                    break 'inner;
+                }
+
+                while let Ok(msg) = rx.try_recv() {
+                    match msg {
+                        GifMsg::NewFrame(rgba) => {
+                            if collect_start.is_none() {
+                                collect_start = Some(Instant::now());
+                            }
+                            if first_dims.is_none() {
+                                first_dims = Some(rgba.dimensions());
+                            }
+                            if writer.is_none() && warmup.len() < GIF_WARMUP_FRAMES {
+                                append_gif_training_sample(&mut training, &rgba);
+                                warmup.push(rgba.clone());
+                            }
+                            last_rgba = Some(rgba);
+                        }
+                        GifMsg::Stop => stop_flag.store(true, Ordering::SeqCst),
+                    }
+                }
+
+                if last_rgba.is_none() {
+                    if thread_start.elapsed() > first_frame_timeout {
+                        encode_error = Some("Timed out waiting for first GIF frame".to_string());
+                        break 'inner;
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+
+                if writer.is_none()
+                    && (warmup.len() >= GIF_WARMUP_FRAMES || stop_flag.load(Ordering::SeqCst))
+                {
+                    if let Some(dims) = first_dims {
+                        if let Err(e) = init_gif_stream(
+                            &mut writer,
+                            &mut warmup,
+                            &training,
+                            dims,
+                            fps,
+                            &file_path,
+                        ) {
+                            encode_error = Some(e);
+                            break 'inner;
+                        }
+                    }
+                }
+
+                if let Some(w) = writer.as_mut() {
+                    if let Some(frame) = &last_rgba {
+                        if let Err(e) = w.write_frame(frame) {
+                            encode_error = Some(e);
+                            break 'inner;
+                        }
+                    }
+                }
+                break 'inner;
+            }
+
+            if encode_error.is_some() || stop_flag.load(Ordering::SeqCst) || is_result_set(&result) {
+                break;
+            }
+
+            if frame_idx < total_frames - 1 {
+                if let Some(start) = collect_start {
+                    let target =
+                        start + Duration::from_nanos((frame_idx as u64 + 1) * nanos_per_frame);
+                    if let Some(wait) = target.checked_duration_since(Instant::now()) {
+                        std::thread::sleep(wait);
+                    }
+                }
+            }
+        }
+
+        // Finalize: a very short capture may never have filled the warm-up
+        // buffer, so initialize the stream from whatever frames we have.
+        if let Some(dims) = first_dims {
+            if let Err(e) = init_gif_stream(&mut writer, &mut warmup, &training, dims, fps, &file_path)
+                && encode_error.is_none()
+            {
+                encode_error = Some(e);
+            }
+        }
+
+        let frame_count = writer.as_ref().map(|w| w.frames_written as usize).unwrap_or(0);
+        if let Some(mut w) = writer.take() {
+            w.finish();
+        }
+
+        let thumb_data = thumbnail.lock().unwrap().clone();
+        write_thumbnail(&thumb_data, &thumb_path, save_thumbnail);
+
+        let mut res = result.lock().unwrap();
+        if res.is_none() {
+            if let Some(e) = encode_error {
+                *res = Some(CaptureResultInternal::Error(e));
+            } else if frame_count >= 2 {
+                *res = Some(CaptureResultInternal::Gif {
+                    frame_count,
+                    thumbnail: thumb_data,
+                });
+            } else {
+                *res = Some(CaptureResultInternal::Error(
+                    "Not enough frames captured".to_string(),
+                ));
+            }
+        }
+        stop_flag.store(true, Ordering::SeqCst);
+    })
 }
 
 #[cfg(test)]
@@ -2207,5 +2285,73 @@ mod tests {
             assert!(ts >= prev);
             prev = ts;
         }
+    }
+
+    #[test]
+    fn gif_stream_writer_produces_valid_animation() {
+        let file_path = std::env::temp_dir().join("pixelsnap_stream_gif_test.gif");
+        let thumb_path = std::env::temp_dir().join("pixelsnap_stream_gif_test_thumb.png");
+        let _ = fs::remove_file(&file_path);
+        let _ = fs::remove_file(&thumb_path);
+
+        let (tx, rx) = mpsc::channel::<GifMsg>();
+        let result = make_result();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        let thumbnail = Arc::new(Mutex::new(None));
+        let collector = run_gif_collector(
+            rx,
+            result.clone(),
+            stop_flag.clone(),
+            thumbnail,
+            thumb_path.clone(),
+            false,
+            file_path.clone(),
+            15,
+            1,
+        );
+
+        // Send 16 frames (more than the 8-frame warm-up) then stop.
+        for i in 0..16u8 {
+            let mut img = RgbaImage::new(64, 64);
+            for (x, y, p) in img.enumerate_pixels_mut() {
+                *p = image::Rgba([x as u8 ^ i, y as u8, (x + y) as u8 ^ i, 255]);
+            }
+            tx.send(GifMsg::NewFrame(img)).unwrap();
+        }
+        tx.send(GifMsg::Stop).unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !is_result_set(&result) {
+            assert!(Instant::now() < deadline, "collector did not finish");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        collector.join().unwrap();
+
+        let res = result.lock().unwrap().take();
+        match res {
+            Some(CaptureResultInternal::Gif { frame_count, .. }) => {
+                assert!(frame_count >= 2, "expected at least 2 frames, got {}", frame_count);
+            }
+            other => panic!("unexpected result: {:?}", other.map(|r| match r {
+                CaptureResultInternal::Gif { frame_count, .. } => format!("gif {}", frame_count),
+                CaptureResultInternal::Error(e) => e,
+                _ => "other".to_string(),
+            })),
+        }
+
+        // The file must be a decodable GIF with the expected number of frames.
+        let file = fs::File::open(&file_path).expect("gif file should exist");
+        let mut options = gif::DecodeOptions::new();
+        options.set_color_output(gif::ColorOutput::RGBA);
+        let mut decoder = options.read_info(file).expect("gif header should decode");
+        let mut decoded = 0usize;
+        while decoder.read_next_frame().unwrap().is_some() {
+            decoded += 1;
+        }
+        assert!(decoded >= 2, "decoded frames: {}", decoded);
+        assert!(decoded <= 16, "decoded frames: {}", decoded);
+
+        let _ = fs::remove_file(&file_path);
+        let _ = fs::remove_file(&thumb_path);
     }
 }
