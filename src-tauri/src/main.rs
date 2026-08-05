@@ -658,10 +658,7 @@ mod tests {
         let current = base_config();
         let incoming = serde_json::json!({ "mode": "video" });
         let merged = merge_and_validate_config(&current, incoming).unwrap();
-        assert_eq!(merged.capture_target, "auto");
-        assert_eq!(merged.video_format, "mp4");
         assert_eq!(merged.video_bitrate, 8_000_000);
-        assert_eq!(merged.motion_format, "gif");
         assert_eq!(merged.audio_bitrate, 192_000);
     }
 

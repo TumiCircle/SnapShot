@@ -1,105 +1,61 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 use dirs::config_dir;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     // ---- Mode ----
-    #[serde(default = "default_mode")]
     pub mode: String,
-    #[serde(default = "default_capture_target")]
-    pub capture_target: String,
-    // ---- Capture formats ----
-    #[serde(default = "default_image_format")]
     pub image_format: String,
-    #[serde(default = "default_quality")]
     pub jpeg_quality: u8,
-    #[serde(default = "default_video_format")]
-    pub video_format: String,
-    #[serde(default = "default_video_bitrate")]
     pub video_bitrate: u32,
-    #[serde(default = "default_vid_dur")]
     pub video_duration: u32,
-    #[serde(default = "default_vid_fps")]
     pub video_fps: u32,
-    #[serde(default = "default_motion_format")]
-    pub motion_format: String,
-    #[serde(default = "default_mot_dur")]
     pub motion_duration: u32,
-    #[serde(default = "default_mot_fps")]
     pub motion_fps: u32,
     // ---- Output ----
-    #[serde(default = "default_save_dir")]
     pub save_dir: String,
-    #[serde(default = "default_filename_prefix", alias = "file_prefix")]
     pub filename_prefix: String,
-    #[serde(default = "default_thumb_size")]
     pub thumbnail_size: u32,
-    #[serde(default = "default_false")]
     pub save_thumbnail: bool,
     // ---- Hotkeys ----
-    #[serde(default = "default_hotkey_image")]
     pub hotkey_image: String,
-    #[serde(default = "default_hotkey_video")]
     pub hotkey_video: String,
-    #[serde(default = "default_hotkey_motion")]
     pub hotkey_motion: String,
     // ---- Recording ----
-    #[serde(default = "default_true", alias = "record_audio")]
     pub record_system_audio: bool,
-    #[serde(default = "default_audio_bitrate")]
     pub audio_bitrate: u32,
-    #[serde(default = "default_rec_position", alias = "rec_corner")]
-    pub rec_position: String,
     // ---- Appearance ----
-    #[serde(default = "default_window_transparency")]
     pub window_transparency: u32,
-    #[serde(default = "default_ui_transparency")]
     pub ui_transparency: u32,
-    #[serde(default = "default_starfield_density")]
     pub starfield_density: u32,
-    #[serde(default = "default_star_twinkle_speed")]
     pub star_twinkle_speed: u32,
-    #[serde(default = "default_meteor_rate")]
     pub meteor_rate: u32,
-    #[serde(default = "default_language")]
     pub language: String,
     // ---- Behavior ----
-    #[serde(default = "default_true", alias = "sound_on")]
     pub sound_enabled: bool,
-    #[serde(default = "default_toast_dur")]
     pub toast_duration: u64,
-    #[serde(default = "default_true", alias = "toast_on")]
     pub show_toast: bool,
-    #[serde(default = "default_false", alias = "auto_open")]
-    #[serde(alias = "auto_open_folder")]
     pub auto_open_folder: bool,
-    #[serde(default = "default_false", alias = "start_tray")]
-    #[serde(alias = "start_to_tray")]
     pub start_minimized: bool,
-    #[serde(default = "default_true", alias = "hide_capture")]
     pub hide_on_capture: bool,
-    #[serde(default = "default_close_behavior")]
     pub close_to_tray: bool,
 }
 
 fn default_mode() -> String { "image".to_string() }
-fn default_capture_target() -> String { "auto".to_string() }
 fn default_image_format() -> String { "png".to_string() }
 fn default_quality() -> u8 { 90 }
 fn default_vid_dur() -> u32 { 3 }
 fn default_vid_fps() -> u32 { 30 }
-fn default_video_format() -> String { "mp4".to_string() }
 fn default_video_bitrate() -> u32 { 8_000_000 }
 fn default_mot_dur() -> u32 { 3 }
 fn default_mot_fps() -> u32 { 15 }
-fn default_motion_format() -> String { "gif".to_string() }
 fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_toast_dur() -> u64 { 2500 }
 fn default_thumb_size() -> u32 { 128 }
-fn default_rec_position() -> String { "top-left".to_string() }
 fn default_filename_prefix() -> String { "snap".to_string() }
 fn default_close_behavior() -> bool { true }
 fn default_audio_bitrate() -> u32 { 192_000 }
@@ -126,14 +82,11 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             mode: default_mode(),
-            capture_target: default_capture_target(),
             image_format: default_image_format(),
             jpeg_quality: default_quality(),
-            video_format: default_video_format(),
             video_bitrate: default_video_bitrate(),
             video_duration: default_vid_dur(),
             video_fps: default_vid_fps(),
-            motion_format: default_motion_format(),
             motion_duration: default_mot_dur(),
             motion_fps: default_mot_fps(),
             save_dir: default_save_dir(),
@@ -145,7 +98,6 @@ impl Default for AppConfig {
             hotkey_motion: default_hotkey_motion(),
             record_system_audio: default_true(),
             audio_bitrate: default_audio_bitrate(),
-            rec_position: default_rec_position(),
             window_transparency: default_window_transparency(),
             ui_transparency: default_ui_transparency(),
             starfield_density: default_starfield_density(),
@@ -160,6 +112,199 @@ impl Default for AppConfig {
             hide_on_capture: default_true(),
             close_to_tray: default_close_behavior(),
         }
+    }
+}
+
+fn get_value<'a>(value: &'a Value, group: &str, keys: &[&str]) -> Option<&'a Value> {
+    for key in keys {
+        if let Some(v) = value.get(key) {
+            if !v.is_object() && !v.is_array() {
+                return Some(v);
+            }
+        }
+    }
+    if let Some(group_value) = value.get(group) {
+        for key in keys {
+            if let Some(v) = group_value.get(key) {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
+fn as_str(v: &Value, default: &str) -> String {
+    v.as_str().unwrap_or(default).to_string()
+}
+
+fn as_u32(v: &Value, default: u32) -> u32 {
+    v.as_u64().map(|n| n as u32).unwrap_or(default)
+}
+
+fn as_u64(v: &Value, default: u64) -> u64 {
+    v.as_u64().unwrap_or(default)
+}
+
+fn as_bool(v: &Value, default: bool) -> bool {
+    v.as_bool().unwrap_or(default)
+}
+
+impl Serialize for AppConfig {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        json!({
+            "mode": {
+                "mode": self.mode,
+                "image_format": self.image_format,
+                "jpeg_quality": self.jpeg_quality,
+                "video_bitrate": self.video_bitrate,
+                "video_duration": self.video_duration,
+                "video_fps": self.video_fps,
+                "motion_duration": self.motion_duration,
+                "motion_fps": self.motion_fps,
+            },
+            "output": {
+                "save_dir": self.save_dir,
+                "filename_prefix": self.filename_prefix,
+                "thumbnail_size": self.thumbnail_size,
+                "save_thumbnail": self.save_thumbnail,
+            },
+            "hotkeys": {
+                "hotkey_image": self.hotkey_image,
+                "hotkey_video": self.hotkey_video,
+                "hotkey_motion": self.hotkey_motion,
+            },
+            "recording": {
+                "record_system_audio": self.record_system_audio,
+                "audio_bitrate": self.audio_bitrate,
+            },
+            "appearance": {
+                "window_transparency": self.window_transparency,
+                "ui_transparency": self.ui_transparency,
+                "starfield_density": self.starfield_density,
+                "star_twinkle_speed": self.star_twinkle_speed,
+                "meteor_rate": self.meteor_rate,
+                "language": self.language,
+            },
+            "behavior": {
+                "sound_enabled": self.sound_enabled,
+                "toast_duration": self.toast_duration,
+                "show_toast": self.show_toast,
+                "auto_open_folder": self.auto_open_folder,
+                "start_minimized": self.start_minimized,
+                "hide_on_capture": self.hide_on_capture,
+                "close_to_tray": self.close_to_tray,
+            },
+        })
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AppConfig {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = Value::deserialize(deserializer)?;
+        let mut cfg = AppConfig::default();
+
+        if let Some(v) = get_value(&value, "mode", &["mode"]) {
+            cfg.mode = as_str(v, "image");
+        }
+        if let Some(v) = get_value(&value, "mode", &["image_format"]) {
+            cfg.image_format = as_str(v, "png");
+        }
+        if let Some(v) = get_value(&value, "mode", &["jpeg_quality"]) {
+            cfg.jpeg_quality = as_u32(v, 90) as u8;
+        }
+        if let Some(v) = get_value(&value, "mode", &["video_bitrate"]) {
+            cfg.video_bitrate = as_u32(v, 8_000_000);
+        }
+        if let Some(v) = get_value(&value, "mode", &["video_duration"]) {
+            cfg.video_duration = as_u32(v, 3);
+        }
+        if let Some(v) = get_value(&value, "mode", &["video_fps"]) {
+            cfg.video_fps = as_u32(v, 30);
+        }
+        if let Some(v) = get_value(&value, "mode", &["motion_duration"]) {
+            cfg.motion_duration = as_u32(v, 3);
+        }
+        if let Some(v) = get_value(&value, "mode", &["motion_fps"]) {
+            cfg.motion_fps = as_u32(v, 15);
+        }
+
+        if let Some(v) = get_value(&value, "output", &["save_dir"]) {
+            cfg.save_dir = as_str(v, &default_save_dir());
+        }
+        if let Some(v) = get_value(&value, "output", &["filename_prefix", "file_prefix"]) {
+            cfg.filename_prefix = as_str(v, "snap");
+        }
+        if let Some(v) = get_value(&value, "output", &["thumbnail_size"]) {
+            cfg.thumbnail_size = as_u32(v, 128);
+        }
+        if let Some(v) = get_value(&value, "output", &["save_thumbnail"]) {
+            cfg.save_thumbnail = as_bool(v, false);
+        }
+
+        if let Some(v) = get_value(&value, "hotkeys", &["hotkey_image"]) {
+            cfg.hotkey_image = as_str(v, "CommandOrControl+Shift+S");
+        }
+        if let Some(v) = get_value(&value, "hotkeys", &["hotkey_video"]) {
+            cfg.hotkey_video = as_str(v, "CommandOrControl+Shift+V");
+        }
+        if let Some(v) = get_value(&value, "hotkeys", &["hotkey_motion"]) {
+            cfg.hotkey_motion = as_str(v, "CommandOrControl+Shift+M");
+        }
+
+        if let Some(v) = get_value(&value, "recording", &["record_system_audio", "record_audio"]) {
+            cfg.record_system_audio = as_bool(v, true);
+        }
+        if let Some(v) = get_value(&value, "recording", &["audio_bitrate"]) {
+            cfg.audio_bitrate = as_u32(v, 192_000);
+        }
+
+        if let Some(v) = get_value(&value, "appearance", &["window_transparency"]) {
+            cfg.window_transparency = as_u32(v, 0);
+        }
+        if let Some(v) = get_value(&value, "appearance", &["ui_transparency"]) {
+            cfg.ui_transparency = as_u32(v, 0);
+        }
+        if let Some(v) = get_value(&value, "appearance", &["starfield_density"]) {
+            cfg.starfield_density = as_u32(v, 50);
+        }
+        if let Some(v) = get_value(&value, "appearance", &["star_twinkle_speed"]) {
+            cfg.star_twinkle_speed = as_u32(v, 50);
+        }
+        if let Some(v) = get_value(&value, "appearance", &["meteor_rate"]) {
+            cfg.meteor_rate = as_u32(v, 50);
+        }
+        if let Some(v) = get_value(&value, "appearance", &["language"]) {
+            cfg.language = as_str(v, "en");
+        }
+
+        if let Some(v) = get_value(&value, "behavior", &["sound_enabled", "sound_on"]) {
+            cfg.sound_enabled = as_bool(v, true);
+        }
+        if let Some(v) = get_value(&value, "behavior", &["toast_duration"]) {
+            cfg.toast_duration = as_u64(v, 2500);
+        }
+        if let Some(v) = get_value(&value, "behavior", &["show_toast", "toast_on"]) {
+            cfg.show_toast = as_bool(v, true);
+        }
+        if let Some(v) = get_value(&value, "behavior", &["auto_open_folder", "auto_open"]) {
+            cfg.auto_open_folder = as_bool(v, false);
+        }
+        if let Some(v) = get_value(
+            &value,
+            "behavior",
+            &["start_minimized", "start_tray", "start_to_tray"],
+        ) {
+            cfg.start_minimized = as_bool(v, false);
+        }
+        if let Some(v) = get_value(&value, "behavior", &["hide_on_capture", "hide_capture"]) {
+            cfg.hide_on_capture = as_bool(v, true);
+        }
+        if let Some(v) = get_value(&value, "behavior", &["close_to_tray"]) {
+            cfg.close_to_tray = as_bool(v, true);
+        }
+
+        Ok(cfg)
     }
 }
 
@@ -225,18 +370,39 @@ mod tests {
 
     #[test]
     fn config_json_fields_are_grouped_by_category() {
-        let json = serde_json::to_string(&AppConfig::default()).unwrap();
-        // Mode group first, then capture formats
-        assert!(json.contains(r#""mode":"image","capture_target":"auto","image_format":"png","jpeg_quality":90,"video_format":"mp4""#));
-        // Output group before hotkeys
-        let output_idx = json.find(r#""save_dir":"#).unwrap();
-        let hotkey_idx = json.find(r#""hotkey_image":"#).unwrap();
-        assert!(output_idx < hotkey_idx);
-        // Appearance group before behavior group
-        let appearance_idx = json.find(r#""window_transparency":"#).unwrap();
-        let behavior_idx = json.find(r#""sound_enabled":"#).unwrap();
-        assert!(appearance_idx < behavior_idx);
-        // Behavior group ends the file
-        assert!(json.trim_end().ends_with(r#""hide_on_capture":true,"close_to_tray":true}"#));
+        let json = serde_json::to_value(&AppConfig::default()).unwrap();
+        let obj = json.as_object().unwrap();
+        for group in ["mode", "output", "hotkeys", "recording", "appearance", "behavior"] {
+            assert!(obj.contains_key(group), "missing group: {}", group);
+        }
+        assert_eq!(obj["mode"]["mode"], "image");
+        assert_eq!(obj["mode"]["video_fps"], 30);
+        assert!(obj["output"].get("save_dir").is_some());
+        assert!(obj["hotkeys"].get("hotkey_image").is_some());
+        assert!(obj["recording"].get("record_system_audio").is_some());
+        assert!(obj["appearance"].get("window_transparency").is_some());
+        assert!(obj["behavior"].get("close_to_tray").is_some());
+    }
+
+    #[test]
+    fn config_accepts_nested_and_flat() {
+        let nested = serde_json::json!({
+            "mode": { "mode": "video", "video_fps": 60 },
+            "behavior": { "close_to_tray": false }
+        });
+        let cfg: AppConfig = serde_json::from_value(nested).unwrap();
+        assert_eq!(cfg.mode, "video");
+        assert_eq!(cfg.video_fps, 60);
+        assert!(!cfg.close_to_tray);
+
+        let flat = serde_json::json!({
+            "mode": "image",
+            "video_fps": 45,
+            "close_to_tray": false
+        });
+        let cfg: AppConfig = serde_json::from_value(flat).unwrap();
+        assert_eq!(cfg.mode, "image");
+        assert_eq!(cfg.video_fps, 45);
+        assert!(!cfg.close_to_tray);
     }
 }
