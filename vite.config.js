@@ -4,6 +4,7 @@ export default defineConfig({
   root: '.',
   build: {
     outDir: 'dist',
+    emptyOutDir: false,
   },
   server: {
     port: 1420,

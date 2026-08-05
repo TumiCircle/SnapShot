@@ -25,11 +25,13 @@ body.show{
   width:100%;             /* 从固定 304px 改为 100% */
   height:100%;            /* 从固定 84px 改为 100% */
   background:#1d1840;
-  border-radius:8px;
+  border-radius:6px;
   overflow:hidden;
   display:flex;gap:8px;padding:8px;  /* 保留内部 padding，用于内容与窗口边缘的间距 */
   position:relative;
+  border:2px solid #0a0818;
   box-shadow:
+    0 0 0 2px #8c82ff,
     inset 2px 2px 0 #0a0818,
     inset -2px -2px 0 #8c82ff;
 }
@@ -45,7 +47,7 @@ body.show{
   z-index:10;
 }
 .th{
-  width:60px;height:60px;flex-shrink:0;
+  width:64px;height:64px;flex-shrink:0;
   border-radius:4px;
   background:#0a0818;
   box-shadow:
@@ -55,12 +57,42 @@ body.show{
   overflow:hidden;
 }
 .th img{
+  display:none;
   max-width:100%;max-height:100%;
+  object-fit:contain;
   image-rendering:pixelated;
+}
+.loading{
+  display:grid;
+  grid-template-columns:repeat(2,9px);
+  grid-template-rows:repeat(2,9px);
+  gap:2px;
+}
+.loading i{
+  background:#7fffd4;
+  box-shadow:inset -2px -2px 0 #2da88a, inset 2px 2px 0 #b8ffe8;
+  animation:loadPulse .7s steps(2) infinite;
+}
+.loading i:nth-child(2){
+  background:#ff6eb4;
+  box-shadow:inset -2px -2px 0 #b83d7a, inset 2px 2px 0 #ff9dcf;
+  animation-delay:.18s;
+}
+.loading i:nth-child(3){
+  background:#ffee78;
+  box-shadow:inset -2px -2px 0 #c5a820, inset 2px 2px 0 #fff6b0;
+  animation-delay:.36s;
+}
+.loading i:nth-child(4){
+  animation-delay:.54s;
+}
+@keyframes loadPulse{
+  0%,49%{opacity:1}
+  50%,100%{opacity:.2}
 }
 .in{
   flex:1;display:flex;flex-direction:column;
-  justify-content:center;gap:4px;overflow:hidden;
+  justify-content:center;gap:4px;height:64px;min-width:0;overflow:hidden;
   position:relative;z-index:1;
 }
 .mt{
@@ -126,7 +158,7 @@ body.show{
   to{transform:translateX(0)}
 }
 </style></head><body>
-<div class="t"><div class="th"><img id="thumb" src=""></div>
+<div class="t"><div class="th"><div class="loading" id="thumb-loading"><i></i><i></i><i></i><i></i></div><img id="thumb" alt=""></div>
 <div class="in"><div class="mt" id="mode">SNAP IMAGE</div><div class="msg" id="msg"></div><div class="st" id="status"><span class="dt"></span><span id="status-text">COMPLETED!</span></div></div></div>
 <script>
 var I18N = {
@@ -174,6 +206,7 @@ window.__setToastData = function(mode, game, fname, thumbB64, lang, status) {
   var modeEl = document.getElementById('mode');
   var msgEl = document.getElementById('msg');
   var thumbEl = document.getElementById('thumb');
+  var loadEl = document.getElementById('thumb-loading');
   var modeMap = {
     'VIDEO': { cls: 'video', label: d.VIDEO },
     'MOTION': { cls: 'motion', label: d.MOTION },
@@ -194,7 +227,15 @@ window.__setToastData = function(mode, game, fname, thumbB64, lang, status) {
     document.getElementById('status-text').textContent = d.COMPLETED;
   }
   document.getElementById('status').className = 'st' + (mode === 'ERROR' ? ' error' : status === 'rec' ? ' rec' : '');
-  thumbEl.src = 'data:image/png;base64,' + thumbB64;
+  if (thumbB64) {
+    thumbEl.style.display = 'block';
+    loadEl.style.display = 'none';
+    thumbEl.src = 'data:image/png;base64,' + thumbB64;
+  } else {
+    thumbEl.removeAttribute('src');
+    thumbEl.style.display = 'none';
+    loadEl.style.display = 'grid';
+  }
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){ document.body.classList.add('show'); });
   });

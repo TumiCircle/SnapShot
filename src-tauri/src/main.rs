@@ -137,6 +137,22 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
     let cfg = app.state::<AppState>().config.lock().map_err(|e| e.to_string())?.clone();
     let capture_mode = mode.unwrap_or_else(|| cfg.mode.clone());
 
+    // Show the status toast immediately on trigger. Image goes straight to
+    // "COMPLETED"; video/motion show "REC" and switch to the completion state
+    // when the capture finishes. This avoids the ~1s wait for capture startup.
+    if cfg.show_toast {
+        let label = match capture_mode.as_str() {
+            "video" => "VIDEO",
+            "motion" => "MOTION",
+            _ => "IMAGE",
+        };
+        if capture_mode == "image" {
+            toast::show_immediate_complete_toast(app, label);
+        } else {
+            toast::show_rec_toast(app, label);
+        }
+    }
+
     if hide_window && cfg.hide_on_capture {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.hide();
@@ -147,41 +163,18 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
     let config_arc = app.state::<AppState>().config.clone();
     let app_owned = app.clone();
     let completed = Arc::new(AtomicBool::new(false));
-    let started_mode = capture_mode.clone();
 
     capture::start_capture(&cfg, Some(&capture_mode), move |event| {
         let a = app_owned.clone();
         let cfg_arc = config_arc.clone();
         let comp = completed.clone();
         let for_thread = a.clone();
-        let started_label = started_mode.clone();
         let _ = a.run_on_main_thread(move || {
             let a_inner = for_thread;
             let main_window = a_inner.get_webview_window("main");
 
             match event {
                 capture::CaptureEvent::Started(is_dynamic) => {
-                    let mode_label = match started_label.as_str() {
-                        "video" => "VIDEO",
-                        "motion" => "MOTION",
-                        _ => "IMAGE",
-                    };
-                    if is_dynamic {
-                        // Video/motion: the toast itself is the REC indicator now.
-                        let rec_ms = {
-                            let c = cfg_arc.lock().unwrap();
-                            let secs = if started_label.as_str() == "video" {
-                                c.video_duration
-                            } else {
-                                c.motion_duration
-                            };
-                            secs.max(1) as u64 * 1000 + 1000
-                        };
-                        toast::show_rec_toast(&a_inner, mode_label, rec_ms);
-                    } else {
-                        // Image: give instant completion feedback.
-                        toast::show_immediate_complete_toast(&a_inner, mode_label);
-                    }
                     if let Some(w) = &main_window {
                         let _ = w.emit("capture-started", is_dynamic);
                     }
@@ -487,6 +480,7 @@ fn main() {
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            toast::init(&app_handle);
             register_all_shortcuts(&app_handle);
 
             if start_min {

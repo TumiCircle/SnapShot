@@ -39,7 +39,7 @@
 - 🎨 **CRT retro UI** - pixel art style, animated starfield background, scanline effect
 - 📁 **Custom save path** - pick the output folder via a browse dialog
 - 🪟 **System tray** - minimize to tray, quick capture from the tray menu
-- 🔴 **REC indicator** - blinking red dot while recording (excluded from the capture itself)
+- 🔴 **Recording toast** - REC and completion states share the same toast; no separate REC window
 - 🖼️ **Thumbnails** - optional, with adjustable size
 - 🔔 **Toast notifications** - non-intrusive completion popups
 - 🎵 **Sound effects** - optional capture completion sound
@@ -108,7 +108,6 @@ All settings can be adjusted in the UI. The configuration file is stored at:
 - Image format and quality
 - Video duration, frame rate and bitrate
 - GIF duration and frame rate
-- REC indicator position (four corners)
 - Window / UI transparency, starfield density, twinkle speed, meteor rate
 - Startup behavior (minimize to tray)
 - Auto-open folder after capture
@@ -135,7 +134,6 @@ PixelSnap/
 ├── dist/                      # Frontend static files (HTML/CSS/JS)
 │   ├── index.html             # Main settings UI
 │   ├── app.js                 # Frontend logic
-│   ├── rec.html               # REC indicator window
 │   └── toast.html             # Toast notification window
 ├── src-tauri/
 │   ├── src/

@@ -7,7 +7,6 @@ const $$ = (sel) => document.querySelectorAll(sel);
 
 let activeMode = 'image';
 let activeFmt = 'png';
-let activeRecPos = 'top-left';
 let cooldown = false;
 let currentCfg = null;
 
@@ -73,7 +72,6 @@ const I18N = {
     hotkeyPlaceholder: 'Click to record...',
     recording: '▸ RECORDING',
     recordSystemAudio: 'RECORD SYSTEM AUDIO',
-    recPosition: 'REC POSITION',
     videoBitrate: 'VIDEO BITRATE',
     toastDuration: 'TOAST DURATION',
     appearance: '▸ APPEARANCE',
@@ -134,7 +132,6 @@ const I18N = {
     hotkeyPlaceholder: '点击录制...',
     recording: '▸ 录制设置',
     recordSystemAudio: '录制系统声音',
-    recPosition: '录制位置',
     videoBitrate: '视频码率',
     toastDuration: '提示时长',
     appearance: '▸ 外观',
@@ -242,6 +239,16 @@ function buildStarfield() {
 
 // ---- Meteor shower (rate from settings) ----
 let meteorTimer = null;
+const meteorRafs = new Set();
+const meteorTimers = new Set();
+
+function clearMeteorFx() {
+  meteorRafs.forEach(id => cancelAnimationFrame(id));
+  meteorRafs.clear();
+  meteorTimers.forEach(id => clearInterval(id));
+  meteorTimers.clear();
+}
+
 function startMeteors() {
   const sf = $('#starfield');
   if (!sf) return;
@@ -249,39 +256,121 @@ function startMeteors() {
     clearInterval(meteorTimer);
     meteorTimer = null;
   }
+  clearMeteorFx();
   const rate = clampInt($('#meteor-rate').value, 0, 100);
   if (rate <= 0) return;
   const interval = Math.round(5200 - rate * 42);
   function makeMeteor() {
+    const colors = [
+      { main: '255,110,180', glow: '255,157,207' },
+      { main: '127,255,212', glow: '184,255,232' },
+      { main: '255,238,120', glow: '255,246,176' },
+    ];
+    const pick = colors[Math.floor(Math.random() * colors.length)];
+    const main = pick.main;
+    const glow = pick.glow;
     const m = document.createElement('div');
     m.className = 'meteor';
-    m.style.top = Math.random() * -30 + '%';
-    m.style.left = Math.random() * 100 + '%';
-    m.style.animation = 'meteorFall ' + (Math.random() * 0.5 + 0.9).toFixed(2) + 's linear forwards';
-    m.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
-    const pink = Math.random() > 0.5;
-    const main = pink ? '255,110,180' : '127,255,212';
-    // Pixel-art trail: a chain of squares running from top-left (tail) to
-    // bottom-right (head), matching the meteor's down-right flight direction.
-    const segs = 7;
-    for (let i = 0; i < segs; i++) {
+
+    // Bright pixel head with a shimmering glow.
+    const headSize = 9;
+    const head = document.createElement('div');
+    head.className = 'meteor-head';
+    head.style.width = headSize + 'px';
+    head.style.height = headSize + 'px';
+    head.style.background = '#fff';
+    head.style.boxShadow =
+      '0 0 10px 4px rgba(' + main + ',0.95), 0 0 24px 10px rgba(' + glow + ',0.45)';
+    m.appendChild(head);
+
+    // Short comet tail behind the head, aligned with the real movement vector.
+    const startX = (Math.random() * 100) / 100 * window.innerWidth;
+    const startY = (Math.random() * -30) / 100 * window.innerHeight;
+    const distX = window.innerWidth * 0.85;
+    const distY = window.innerHeight * 0.85;
+    const duration = 1500 + Math.random() * 600;
+    const trailLen = 7;
+    for (let i = 1; i <= trailLen; i++) {
       const s = document.createElement('div');
       s.className = 'meteor-seg';
-      const size = 6 - Math.floor(i * 0.6); // 6..3 px
+      const f = i * 0.016;
+      const size = Math.max(2, Math.round(8 - i * 0.9));
+      const offX = -f * distX - size / 2 + headSize / 2;
+      const offY = -f * distY - size / 2 + headSize / 2;
       s.style.width = size + 'px';
       s.style.height = size + 'px';
-      s.style.left = (i * 6) + 'px';
-      s.style.top = (i * 6) + 'px';
-      s.style.background = i === segs - 1 ? '#fff' : 'rgb(' + main + ')';
-      s.style.opacity = (1 - i / segs).toFixed(2);
-      if (i === segs - 1) {
-        s.style.boxShadow = '0 0 6px 2px rgba(' + main + ',0.9)';
-      }
+      s.style.left = offX.toFixed(2) + 'px';
+      s.style.top = offY.toFixed(2) + 'px';
+      s.style.background = 'rgb(' + main + ')';
+      s.style.opacity = Math.max(0.05, 0.8 - i * 0.11).toFixed(2);
       m.appendChild(s);
     }
     sf.appendChild(m);
-    setTimeout(() => m.remove(), 2000);
+
+    const start = performance.now();
+    let burstAt = 0;
+
+    function addSpark(x, y, burst) {
+      const p = document.createElement('div');
+      p.className = 'meteor-particle';
+      const size = burst ? 2 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);
+      p.style.width = size + 'px';
+      p.style.height = size + 'px';
+      p.style.left = x + 'px';
+      p.style.top = y + 'px';
+      const r = Math.random();
+      p.style.background = r < 0.25 ? '#fff' : 'rgb(' + main + ')';
+      if (r > 0.8) p.style.background = '#ffee78';
+      const angle = burst
+        ? Math.random() * Math.PI * 2
+        : Math.atan2(distY, distX) + Math.PI + (Math.random() * 0.8 - 0.4);
+      const speed = burst ? 14 + Math.random() * 30 : 6 + Math.random() * 14;
+      p.style.setProperty('--px', (Math.cos(angle) * speed).toFixed(1) + 'px');
+      p.style.setProperty('--py', (Math.sin(angle) * speed).toFixed(1) + 'px');
+      p.style.animation =
+        'meteorSpark ' +
+        (burst ? 500 + Math.random() * 500 : 250 + Math.random() * 350).toFixed(0) +
+        'ms steps(4) forwards';
+      sf.appendChild(p);
+      setTimeout(() => p.remove(), 1400);
+    }
+
+    const particleTimer = setInterval(() => {
+      const t = Math.min(1, (performance.now() - start) / duration);
+      const hx = startX + distX * t;
+      const hy = startY + distY * t;
+      addSpark(hx, hy, false);
+      if (performance.now() - burstAt > 260 + Math.random() * 180) {
+        burstAt = performance.now();
+        for (let i = 0; i < 10; i++) addSpark(hx, hy, true);
+      }
+    }, 30);
+    meteorTimers.add(particleTimer);
+
+    let rafId = null;
+    function frame(now) {
+      if (rafId !== null) meteorRafs.delete(rafId);
+      const elapsed = now - start;
+      const t = Math.min(1, elapsed / duration);
+      const x = startX + distX * t;
+      const y = startY + distY * t;
+      m.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)';
+      // Quick fade in, slow fade out near the end.
+      m.style.opacity = t < 0.05 ? String(t / 0.05) : t > 0.85 ? String(Math.max(0, (1 - t) / 0.15)) : '1';
+      if (t < 1) {
+        rafId = requestAnimationFrame(frame);
+        meteorRafs.add(rafId);
+      } else {
+        clearInterval(particleTimer);
+        meteorTimers.delete(particleTimer);
+        m.remove();
+      }
+    }
+
+    rafId = requestAnimationFrame(frame);
+    meteorRafs.add(rafId);
   }
+
   meteorTimer = setInterval(() => {
     if (Math.random() < 0.75) makeMeteor();
   }, Math.max(700, interval));
@@ -339,17 +428,6 @@ fmtBtns.forEach(btn => {
 $('#quality').addEventListener('input', (e) => {
   $('#qv').textContent = e.target.value;
   scheduleSave();
-});
-
-// ---- Rec position picker ----
-const recPosBtns = $$('#rec-pos-picker button');
-recPosBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    recPosBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    activeRecPos = btn.dataset.pos;
-    scheduleSave();
-  });
 });
 
 // ---- Sliders ----
@@ -558,7 +636,6 @@ document.addEventListener('input', (e) => {
 });
 
 function collectConfig() {
-  const recPosBtn = $('#rec-pos-picker button.active');
   return {
     mode: activeMode,
     image_format: activeFmt,
@@ -579,7 +656,6 @@ function collectConfig() {
     hide_on_capture: $('#hide-on-capture').checked,
     save_thumbnail: $('#save-thumbnail').checked,
     record_system_audio: $('#record-audio').checked,
-    rec_position: recPosBtn ? recPosBtn.dataset.pos : 'top-left',
     close_to_tray: $('#close-to-tray').checked,
     window_transparency: clampInt($('#win-transparency').value, 0, 100),
     ui_transparency: clampInt($('#ui-transparency').value, 0, 100),
@@ -597,17 +673,12 @@ function applyConfig(cfg) {
   if (!cfg) return;
   activeMode = cfg.mode || 'image';
   activeFmt = (cfg.image_format && (cfg.image_format.toLowerCase() === 'jpg' || cfg.image_format.toLowerCase() === 'jpeg')) ? 'jpg' : 'png';
-  activeRecPos = cfg.rec_position || cfg.rec_corner || 'top-left';
 
   modeBlocks.forEach(b => b.classList.remove('active'));
   const ab = document.querySelector(`.mode-block[data-mode="${activeMode}"]`);
   if (ab) ab.classList.add('active');
 
   updateFmtUI();
-
-  recPosBtns.forEach(b => b.classList.remove('active'));
-  const arb = document.querySelector(`#rec-pos-picker button[data-pos="${activeRecPos}"]`);
-  if (arb) arb.classList.add('active');
 
   // JPG quality
   const jq = cfg.jpeg_quality || 90;

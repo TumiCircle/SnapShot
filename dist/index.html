@@ -90,19 +90,36 @@ body {
 @keyframes blink { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
 
 /* Meteor shower */
-@keyframes meteorFall {
-  0% { transform: translate(0, 0); opacity: 0; }
-  4% { opacity: 1; }
-  100% { transform: translate(90vw, 90vh); opacity: 0; }
-}
 .meteor {
   position: absolute;
+  left: 0;
+  top: 0;
   pointer-events: none;
-  opacity: 0;
+}
+.meteor-head {
+  position: absolute;
+  left: 0;
+  top: 0;
+  image-rendering: pixelated;
+  animation: meteorShimmer .18s steps(2) infinite;
 }
 .meteor-seg {
   position: absolute;
   image-rendering: pixelated;
+}
+.meteor-particle {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+  animation-fill-mode: forwards;
+}
+@keyframes meteorSpark {
+  0% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(var(--px, 0px), var(--py, 0px)); }
+}
+@keyframes meteorShimmer {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.75); }
 }
 
 .scanlines::after {
@@ -356,36 +373,43 @@ body {
 .set-row input[type=range].stepped {
   -webkit-appearance: none;
   appearance: none;
-  height: 18px;
-  background: transparent;
+  height: 20px;
+  background:
+    linear-gradient(90deg,
+      var(--border-light) 0 3px,
+      transparent 3px 25%,
+      var(--border-light) 25% calc(25% + 3px),
+      transparent calc(25% + 3px) 50%,
+      var(--border-light) 50% calc(50% + 3px),
+      transparent calc(50% + 3px) 75%,
+      var(--border-light) 75% calc(75% + 3px),
+      transparent calc(75% + 3px) calc(100% - 3px),
+      var(--border-light) calc(100% - 3px) 100%) center / 100% 18px no-repeat,
+    transparent;
+  border: none;
 }
 .set-row input[type=range].stepped::-webkit-slider-runnable-track {
   height: 6px;
-  background:
-    linear-gradient(90deg, transparent calc(100% - 2px), var(--border-light) calc(100% - 2px)),
-    repeating-linear-gradient(90deg, var(--border-light) 0 2px, transparent 2px 25%),
-    var(--bg-deep);
+  background: var(--bg-deep);
   box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
 }
 .set-row input[type=range].stepped::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 18px;
-  margin-top: -6px;
+  width: 16px;
+  height: 14px;
+  margin-top: -4px;
   background: var(--accent-mint);
   box-shadow: inset -2px -2px 0 #2da88a, inset 2px 2px 0 #b8ffe8;
 }
 .set-row input[type=range].stepped::-moz-range-track {
   height: 6px;
-  background:
-    linear-gradient(90deg, transparent calc(100% - 2px), var(--border-light) calc(100% - 2px)),
-    repeating-linear-gradient(90deg, var(--border-light) 0 2px, transparent 2px 25%),
-    var(--bg-deep);
+  background: var(--bg-deep);
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
 }
 .set-row input[type=range].stepped::-moz-range-thumb {
-  width: 14px;
-  height: 18px;
+  width: 16px;
+  height: 14px;
   border: none;
   border-radius: 0;
   background: var(--accent-mint);
@@ -629,15 +653,6 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
         <span class="box"></span>
         <span data-i18n="recordSystemAudio">RECORD SYSTEM AUDIO</span>
       </label>
-    </div>
-    <div class="set-row">
-      <span class="set-label" data-i18n="recPosition">REC POSITION</span>
-      <div class="segmented grow" id="rec-pos-picker">
-        <button data-pos="top-left" class="active">TL</button>
-        <button data-pos="top-right">TR</button>
-        <button data-pos="bottom-left">BL</button>
-        <button data-pos="bottom-right">BR</button>
-      </div>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="videoBitrate">VIDEO BITRATE</span>
