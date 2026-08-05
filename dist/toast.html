@@ -25,7 +25,9 @@ body.show{
   width:100%;             /* 从固定 304px 改为 100% */
   height:100%;            /* 从固定 84px 改为 100% */
   background:#1d1840;
-  display:flex;gap:10px;padding:10px;  /* 保留内部 padding，用于内容与窗口边缘的间距 */
+  border-radius:8px;
+  overflow:hidden;
+  display:flex;gap:8px;padding:8px;  /* 保留内部 padding，用于内容与窗口边缘的间距 */
   position:relative;
   box-shadow:
     inset 2px 2px 0 #0a0818,
@@ -43,7 +45,8 @@ body.show{
   z-index:10;
 }
 .th{
-  width:64px;height:64px;flex-shrink:0;
+  width:60px;height:60px;flex-shrink:0;
+  border-radius:4px;
   background:#0a0818;
   box-shadow:
     inset 2px 2px 0 #0a0818,
@@ -62,7 +65,7 @@ body.show{
 }
 .mt{
   display:inline-flex;align-items:center;gap:4px;
-  font-weight:bold;font-size:10px;
+  font-size:9px;
   font-family:'Press Start 2P',monospace;
   padding:2px 6px;
   background:#7fffd4;color:#0a0818;
@@ -73,7 +76,7 @@ body.show{
 .mt.motion{background:#ff6eb4}
 .mt.error{background:#ff4d6d}
 .msg{
-  font-weight:bold;font-size:15px;
+  font-size:16px;
   font-family:'VT323',monospace;
   color:#b8b2e8;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -102,6 +105,21 @@ body.show{
   box-shadow:
     inset -2px -2px 0 #2da88a,
     inset 2px 2px 0 #b8ffe8;
+}
+
+.st.rec{
+  color:#ff4d6d;
+}
+.st.rec .dt{
+  background:#ff4d6d;
+  box-shadow:
+    inset -2px -2px 0 #8f1f36,
+    inset 2px 2px 0 #ff9db1;
+  animation:recBlink .8s steps(1) infinite;
+}
+@keyframes recBlink{
+  0%,49%{opacity:1}
+  50%,100%{opacity:.25}
 }
 @keyframes slideIn{
   from{transform:translateX(340px)}
@@ -165,9 +183,9 @@ window.__setToastData = function(mode, game, fname, thumbB64, lang, status) {
   var mi = modeMap[mode] || modeMap['IMAGE'];
   modeEl.textContent = mi.label;
   modeEl.className = 'mt' + (mi.cls ? ' ' + mi.cls : '');
-  if (status === 'started') {
+  if (status === 'rec') {
     msgEl.textContent = '';
-    document.getElementById('status-text').textContent = d.CAPTURING;
+    document.getElementById('status-text').textContent = 'REC';
   } else if (mode === 'ERROR') {
     msgEl.textContent = lang === 'zh' ? translateErrorZh(fname) : fname;
     document.getElementById('status-text').textContent = d.FAILED;
@@ -175,7 +193,7 @@ window.__setToastData = function(mode, game, fname, thumbB64, lang, status) {
     msgEl.textContent = fname;
     document.getElementById('status-text').textContent = d.COMPLETED;
   }
-  document.getElementById('status').className = 'st' + (mode === 'ERROR' ? ' error' : '');
+  document.getElementById('status').className = 'st' + (mode === 'ERROR' ? ' error' : status === 'rec' ? ' rec' : '');
   thumbEl.src = 'data:image/png;base64,' + thumbB64;
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){ document.body.classList.add('show'); });

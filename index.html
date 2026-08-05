@@ -352,6 +352,45 @@ body {
 .set-row input[type=range] { flex: 1; accent-color: var(--accent-mint); }
 .set-row .pixel-input { flex: 1; }
 
+/* Stepped sliders: discrete 0/25/50/75/100 stops with tick marks */
+.set-row input[type=range].stepped {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+}
+.set-row input[type=range].stepped::-webkit-slider-runnable-track {
+  height: 6px;
+  background:
+    linear-gradient(90deg, transparent calc(100% - 2px), var(--border-light) calc(100% - 2px)),
+    repeating-linear-gradient(90deg, var(--border-light) 0 2px, transparent 2px 25%),
+    var(--bg-deep);
+  box-shadow: inset 2px 2px 0 var(--border-dark), inset -2px -2px 0 var(--border-light);
+}
+.set-row input[type=range].stepped::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 18px;
+  margin-top: -6px;
+  background: var(--accent-mint);
+  box-shadow: inset -2px -2px 0 #2da88a, inset 2px 2px 0 #b8ffe8;
+}
+.set-row input[type=range].stepped::-moz-range-track {
+  height: 6px;
+  background:
+    linear-gradient(90deg, transparent calc(100% - 2px), var(--border-light) calc(100% - 2px)),
+    repeating-linear-gradient(90deg, var(--border-light) 0 2px, transparent 2px 25%),
+    var(--bg-deep);
+}
+.set-row input[type=range].stepped::-moz-range-thumb {
+  width: 14px;
+  height: 18px;
+  border: none;
+  border-radius: 0;
+  background: var(--accent-mint);
+}
+
 .status-dot {
   display: inline-block; width: 10px; height: 10px; background: var(--accent-mint);
   box-shadow: inset -2px -2px 0 #2da88a, inset 2px 2px 0 #b8ffe8;
@@ -616,27 +655,27 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
     <label class="pixel-label" data-i18n="appearance">▸ APPEARANCE</label>
     <div class="set-row">
       <span class="set-label" data-i18n="windowTransparency">WINDOW TRANSPARENCY</span>
-      <input type="range" class="stepped" id="win-transparency" min="0" max="75" step="25" value="0">
+      <input type="range" class="stepped" id="win-transparency" min="0" max="100" step="25" value="0">
       <span class="set-val" id="win-transparency-label">OFF</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="uiTransparency">UI TRANSPARENCY</span>
-      <input type="range" class="stepped" id="ui-transparency" min="0" max="75" step="25" value="0">
+      <input type="range" class="stepped" id="ui-transparency" min="0" max="100" step="25" value="0">
       <span class="set-val" id="ui-transparency-label">OFF</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="starfieldDensity">STARFIELD DENSITY</span>
-      <input type="range" class="stepped" id="star-density" min="0" max="75" step="25" value="50">
+      <input type="range" class="stepped" id="star-density" min="0" max="100" step="25" value="50">
       <span class="set-val" id="star-density-label">MED</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="starTwinkleSpeed">STAR TWINKLE SPEED</span>
-      <input type="range" class="stepped" id="star-twinkle" min="0" max="75" step="25" value="50">
+      <input type="range" class="stepped" id="star-twinkle" min="0" max="100" step="25" value="50">
       <span class="set-val" id="star-twinkle-label">MED</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="meteorRate">METEOR RATE</span>
-      <input type="range" class="stepped" id="meteor-rate" min="0" max="75" step="25" value="50">
+      <input type="range" class="stepped" id="meteor-rate" min="0" max="100" step="25" value="50">
       <span class="set-val" id="meteor-rate-label">MED</span>
     </div>
     <div class="set-row">

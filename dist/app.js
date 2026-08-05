@@ -22,7 +22,8 @@ function tierKey(v) {
   if (v <= 12) return 'off';
   if (v <= 37) return 'low';
   if (v <= 62) return 'med';
-  return 'high';
+  if (v <= 87) return 'high';
+  return 'max';
 }
 
 function updateTierLabel(inputId, labelId) {
@@ -101,6 +102,7 @@ const I18N = {
     low: 'LOW',
     med: 'MED',
     high: 'HIGH',
+    max: 'MAX',
   },
   zh: {
     appName: '像素快拍',
@@ -161,6 +163,7 @@ const I18N = {
     low: '低',
     med: '中',
     high: '高',
+    max: '满',
   },
 };
 

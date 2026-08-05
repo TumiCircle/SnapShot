@@ -9,7 +9,7 @@ mod audio;
 use std::path::PathBuf;
 use std::sync::{Mutex, Arc, atomic::{AtomicBool, Ordering}};
 use std::time::{Instant, Duration};
-use tauri::{Manager, Emitter, Position, PhysicalPosition};
+use tauri::{Manager, Emitter};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use config::AppConfig;
 
@@ -158,7 +158,6 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
         let _ = a.run_on_main_thread(move || {
             let a_inner = for_thread;
             let main_window = a_inner.get_webview_window("main");
-            let rec_window = a_inner.get_webview_window("rec-indicator");
 
             match event {
                 capture::CaptureEvent::Started(is_dynamic) => {
@@ -167,17 +166,24 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
                         "motion" => "MOTION",
                         _ => "IMAGE",
                     };
-                    toast::show_start_toast(&a_inner, mode_label);
+                    if is_dynamic {
+                        // Video/motion: the toast itself is the REC indicator now.
+                        let rec_ms = {
+                            let c = cfg_arc.lock().unwrap();
+                            let secs = if started_label.as_str() == "video" {
+                                c.video_duration
+                            } else {
+                                c.motion_duration
+                            };
+                            secs.max(1) as u64 * 1000 + 1000
+                        };
+                        toast::show_rec_toast(&a_inner, mode_label, rec_ms);
+                    } else {
+                        // Image: give instant completion feedback.
+                        toast::show_immediate_complete_toast(&a_inner, mode_label);
+                    }
                     if let Some(w) = &main_window {
                         let _ = w.emit("capture-started", is_dynamic);
-                    }
-                    if is_dynamic {
-                        let cfg_now = cfg_arc.lock().unwrap();
-                        position_rec_window(&a_inner, &cfg_now);
-                        drop(cfg_now);
-                        if let Some(rw) = &rec_window {
-                            let _ = rw.show();
-                        }
                     }
                 }
                 capture::CaptureEvent::CaptureComplete(preview) => {
@@ -187,9 +193,6 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
                     if let Some(w) = &main_window {
                         let _ = w.show();
                         let _ = w.emit("capture-completed", ());
-                    }
-                    if let Some(rw) = &rec_window {
-                        let _ = rw.hide();
                     }
 
                     let (play_sound, do_toast, auto_open) = {
@@ -230,9 +233,6 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
                         let _ = w.emit("capture-error", _e.clone());
                     }
                     toast::show_error_toast(&a_inner, &_e);
-                    if let Some(rw) = &rec_window {
-                        let _ = rw.hide();
-                    }
                 }
             }
         });
@@ -335,63 +335,6 @@ fn register_all_shortcuts(app: &tauri::AppHandle) {
             }
         }
     }
-}
-
-fn position_rec_window(app: &tauri::AppHandle, cfg: &AppConfig) {
-    if let Some(rw) = app.get_webview_window("rec-indicator") {
-        let w = 200.0_f64;
-        let h = 56.0_f64;
-        let margin = 12.0_f64;
-        if let Ok(Some(monitor)) = app.primary_monitor() {
-            let size = monitor.size();
-            let sf = monitor.scale_factor();
-            let scr_w = (size.width as f64) / sf;
-            let scr_h = (size.height as f64) / sf;
-            let (x, y) = match cfg.rec_position.as_str() {
-                "top-right" => (scr_w - w - margin, margin),
-                "bottom-left" => (margin, scr_h - h - margin - 40.0),
-                "bottom-right" => (scr_w - w - margin, scr_h - h - margin - 40.0),
-                _ => (margin, margin),
-            };
-            let _ = rw.set_position(Position::Physical(PhysicalPosition {
-                x: (x * sf) as i32,
-                y: (y * sf) as i32,
-            }));
-        }
-    }
-}
-
-fn create_rec_window(app: &tauri::AppHandle) -> tauri::Result<()> {
-    use tauri::{WebviewUrl, WebviewWindowBuilder};
-
-    let rec_window = WebviewWindowBuilder::new(app, "rec-indicator", WebviewUrl::App("rec.html".into()))
-        .inner_size(200.0, 56.0)
-        .position(0.0, 0.0)
-        .decorations(false)
-        .shadow(false)
-        .transparent(true)
-        .always_on_top(true)
-        .resizable(false)
-        .skip_taskbar(true)
-        .visible(false)
-        .build()?;
-
-    // Exclude REC indicator from screen capture so it doesn't appear in recordings,
-    // but remains visible to the user (WDA_EXCLUDEFROMCAPTURE, Windows 10 2004+).
-    #[cfg(windows)]
-    {
-        use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE};
-        if let Ok(hwnd_val) = rec_window.hwnd() {
-            // tauri uses windows 0.61, our code uses windows 0.62.
-            // HWND is #[repr(transparent)] around *mut c_void in both versions, so transmute is safe.
-            let hwnd: windows::Win32::Foundation::HWND = unsafe { std::mem::transmute(hwnd_val) };
-            unsafe {
-                let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
-            }
-        }
-    }
-
-    Ok(())
 }
 
 fn generate_tray_icon() -> tauri::image::Image<'static> {
@@ -545,7 +488,6 @@ fn main() {
         .setup(move |app| {
             let app_handle = app.handle().clone();
             register_all_shortcuts(&app_handle);
-            let _ = create_rec_window(&app_handle);
 
             if start_min {
                 if let Some(w) = app.get_webview_window("main") {

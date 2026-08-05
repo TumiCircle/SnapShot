@@ -49,10 +49,16 @@ pub fn show_error_toast(app: &AppHandle, message: &str) {
     show_toast(app, "ERROR", "CAPTURE FAILED", message, "", 5000, "error");
 }
 
-/// Shows an immediate, short-lived toast as soon as a capture starts, so the
-/// user gets instant feedback when triggering a hotkey.
-pub fn show_start_toast(app: &AppHandle, mode_str: &str) {
-    show_toast(app, mode_str, "", "", "", 900, "started");
+/// Shows a persistent "REC" toast while video/motion recording is active.
+/// The completion toast replaces it when the recording finishes.
+pub fn show_rec_toast(app: &AppHandle, mode_str: &str, duration_ms: u64) {
+    show_toast(app, mode_str, "", "", "", duration_ms, "rec");
+}
+
+/// Image mode: give instant feedback by showing the completion-style toast
+/// right away; the real completion toast (with the file name) replaces it.
+pub fn show_immediate_complete_toast(app: &AppHandle, mode_str: &str) {
+    show_toast(app, mode_str, "", "", "", 1500, "completed");
 }
 
 fn show_toast(
