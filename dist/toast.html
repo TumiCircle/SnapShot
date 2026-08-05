@@ -24,7 +24,7 @@ body.show{
 .t{
   width:100%;             /* 从固定 304px 改为 100% */
   height:100%;            /* 从固定 84px 改为 100% */
-  background:rgba(29,24,64,var(--toast-win-alpha,1));
+  background:transparent;
   clip-path:polygon(
     8px 0,
     calc(100% - 8px) 0,
@@ -47,6 +47,15 @@ body.show{
   display:flex;gap:8px;padding:8px;  /* 保留内部 padding，用于内容与窗口边缘的间距 */
   position:relative;
 }
+.t::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:#1d1840;
+  opacity:var(--toast-win-alpha,1);
+  z-index:0;
+  pointer-events:none;
+}
 .t::after{
   content:'';position:absolute;inset:0;pointer-events:none;
   background:repeating-linear-gradient(
@@ -62,6 +71,8 @@ body.show{
   width:64px;height:64px;flex-shrink:0;
   border-radius:4px;
   background:#0a0818;
+  position:relative;
+  z-index:1;
   box-shadow:
     inset 2px 2px 0 #0a0818,
     inset -2px -2px 0 #8c82ff;
@@ -255,9 +266,7 @@ window.__setToastData = function(mode, game, fname, thumbB64, lang, status, winA
     thumbEl.style.display = 'none';
     loadEl.style.display = 'grid';
   }
-  requestAnimationFrame(function(){
-    requestAnimationFrame(function(){ document.body.classList.add('show'); });
-  });
+  document.body.classList.add('show');
 };
 </script>
 </body></html>
