@@ -227,6 +227,8 @@ function clearMeteorFx() {
   meteorTimers.forEach(id => clearInterval(id));
   meteorTimers.clear();
   activeMeteors = 0;
+  const layer = $('#meteor-layer');
+  if (layer) layer.innerHTML = '';
   const light = $('#meteor-light');
   if (light) {
     light.style.opacity = '0';
@@ -244,8 +246,9 @@ function startMeteors() {
   clearMeteorFx();
   const rate = clampInt($('#meteor-rate').value, 0, 100);
   if (rate <= 0) return;
-  const interval = Math.round(5200 - rate * 42);
+  const interval = Math.round(4200 - rate * 35);
   function makeMeteor() {
+    const fx = $('#meteor-layer') || sf;
     const colors = [
       { main: '255,110,180', glow: '255,157,207' },
       { main: '127,255,212', glow: '184,255,232' },
@@ -270,11 +273,29 @@ function startMeteors() {
       '0 0 10px 4px rgba(' + main + ',0.95), 0 0 24px 10px rgba(' + glow + ',0.45)';
     m.appendChild(head);
 
-    // Short comet tail behind the head, aligned with the real movement vector.
-    const startX = (Math.random() * 100) / 100 * window.innerWidth;
-    const startY = (Math.random() * -30) / 100 * window.innerHeight;
-    const distX = window.innerWidth * 0.85;
-    const distY = window.innerHeight * 0.85;
+    // Pick a start edge and direction so meteors sweep across the whole UI,
+    // not just one diagonal strip.
+    const roll = Math.random();
+    let startX, startY, distX, distY;
+    if (roll < 0.55) {
+      // From the top, across the full width.
+      startX = Math.random() * window.innerWidth;
+      startY = -30 / 100 * window.innerHeight;
+      distX = window.innerWidth * (0.45 + Math.random() * 0.55);
+      distY = window.innerHeight * (0.45 + Math.random() * 0.55);
+    } else if (roll < 0.78) {
+      // From the left edge, crossing toward the right.
+      startX = -30 / 100 * window.innerWidth;
+      startY = Math.random() * window.innerHeight;
+      distX = window.innerWidth * (0.7 + Math.random() * 0.3);
+      distY = window.innerHeight * (0.2 + Math.random() * 0.6);
+    } else {
+      // From the right edge, crossing toward the left.
+      startX = window.innerWidth * 1.3;
+      startY = Math.random() * window.innerHeight;
+      distX = -window.innerWidth * (0.7 + Math.random() * 0.3);
+      distY = window.innerHeight * (0.2 + Math.random() * 0.6);
+    }
     const duration = 1500 + Math.random() * 600;
     const trailLen = 7;
     for (let i = 1; i <= trailLen; i++) {
@@ -292,7 +313,7 @@ function startMeteors() {
       s.style.opacity = Math.max(0.05, 0.8 - i * 0.11).toFixed(2);
       m.appendChild(s);
     }
-    sf.appendChild(m);
+    fx.appendChild(m);
 
     const start = performance.now();
     let burstAt = 0;
@@ -318,7 +339,7 @@ function startMeteors() {
         'meteorSpark ' +
         (burst ? 800 + Math.random() * 600 : 600 + Math.random() * 600).toFixed(0) +
         'ms steps(4) forwards';
-      sf.appendChild(p);
+      fx.appendChild(p);
       setTimeout(() => p.remove(), 2200);
     }
 
@@ -370,8 +391,8 @@ function startMeteors() {
   }
 
   meteorTimer = setInterval(() => {
-    if (Math.random() < 0.75) makeMeteor();
-  }, Math.max(700, interval));
+    if (Math.random() < 0.9) makeMeteor();
+  }, Math.max(500, interval));
 }
 
 // ---- Appearance (window/UI transparency + starfield) ----
