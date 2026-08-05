@@ -17,6 +17,30 @@ function clampInt(v, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
 }
 
+function segVal(el) {
+  if (!el) return 0;
+  const b = el.querySelector('button.active');
+  return b ? parseInt(b.dataset.val, 10) : 0;
+}
+
+function setSeg(el, val) {
+  if (!el) return;
+  let best = null;
+  let bestDiff = Infinity;
+  el.querySelectorAll('button').forEach(b => {
+    const v = parseInt(b.dataset.val, 10);
+    const diff = Math.abs(v - val);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = b;
+    }
+  });
+  if (best) {
+    el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    best.classList.add('active');
+  }
+}
+
 // ---- i18n ----
 const I18N = {
   en: {
@@ -74,6 +98,10 @@ const I18N = {
     completed: 'COMPLETED',
     saved: 'SAVED',
     error: 'ERROR',
+    off: 'OFF',
+    low: 'LOW',
+    med: 'MED',
+    high: 'HIGH',
   },
   zh: {
     appName: '像素快拍',
@@ -130,6 +158,10 @@ const I18N = {
     completed: '完成',
     saved: '已保存',
     error: '错误',
+    off: '关',
+    low: '低',
+    med: '中',
+    high: '高',
   },
 };
 
@@ -179,8 +211,8 @@ function translateError(msg) {
 function buildStarfield() {
   const sf = $('#starfield');
   if (!sf) return;
-  const density = clampInt($('#star-density') && $('#star-density').value, 0, 100);
-  const twinkle = clampInt($('#star-twinkle') && $('#star-twinkle').value, 0, 100);
+  const density = segVal($('#star-density'));
+  const twinkle = segVal($('#star-twinkle'));
   const count = Math.round(20 + density * 0.8);
   sf.innerHTML = '';
   const palette = [null, null, null, 'mint', 'pink', 'yellow'];
@@ -195,6 +227,9 @@ function buildStarfield() {
     if (twinkle > 0) {
       const dur = Math.max(0.4, 1.8 - twinkle / 100).toFixed(2);
       s.style.setProperty('--twinkle-dur', dur + 's');
+      // Negative delays start each star at a random phase so they never blink
+      // in sync.
+      s.style.animationDelay = (-Math.random() * 2).toFixed(2) + 's';
     } else {
       s.style.animation = 'none';
     }
@@ -211,34 +246,35 @@ function startMeteors() {
     clearInterval(meteorTimer);
     meteorTimer = null;
   }
-  const rate = clampInt($('#meteor-rate') && $('#meteor-rate').value, 0, 100);
+  const rate = segVal($('#meteor-rate'));
   if (rate <= 0) return;
   const interval = Math.round(5200 - rate * 42);
   function makeMeteor() {
     const m = document.createElement('div');
     m.className = 'meteor';
     m.style.top = Math.random() * -30 + '%';
-    m.style.left = Math.random() * 120 + 20 + '%';
-    m.style.animation = 'meteorFall ' + (Math.random() * 0.6 + 0.8) + 's linear forwards';
+    m.style.left = Math.random() * 100 + '%';
+    m.style.animation = 'meteorFall ' + (Math.random() * 0.5 + 0.9).toFixed(2) + 's linear forwards';
+    m.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
     if (Math.random() > 0.5) {
-      m.style.background = 'linear-gradient(90deg, transparent, var(--accent-pink), #fff)';
-      m.style.boxShadow = '0 0 6px var(--accent-pink), 0 0 12px rgba(255,110,180,0.4)';
+      m.style.background = 'linear-gradient(90deg, transparent, rgba(255,110,180,0.7) 72%, #fff)';
+      m.style.boxShadow = '0 0 8px 1px rgba(255,110,180,0.85), 0 0 22px 2px rgba(255,110,180,0.35)';
     } else {
-      m.style.background = 'linear-gradient(90deg, transparent, var(--accent-mint), #fff)';
-      m.style.boxShadow = '0 0 6px var(--accent-mint), 0 0 12px rgba(127,255,212,0.4)';
+      m.style.background = 'linear-gradient(90deg, transparent, rgba(127,255,212,0.7) 72%, #fff)';
+      m.style.boxShadow = '0 0 8px 1px rgba(127,255,212,0.85), 0 0 22px 2px rgba(127,255,212,0.35)';
     }
     sf.appendChild(m);
-    setTimeout(() => m.remove(), 1600);
+    setTimeout(() => m.remove(), 2000);
   }
   meteorTimer = setInterval(() => {
-    if (Math.random() < 0.55) makeMeteor();
-  }, interval);
+    if (Math.random() < 0.75) makeMeteor();
+  }, Math.max(700, interval));
 }
 
 // ---- Appearance (window/UI transparency + starfield) ----
 function applyAppearance() {
-  const winT = clampInt($('#win-transparency').value, 0, 100);
-  const uiT = clampInt($('#ui-transparency').value, 0, 100);
+  const winT = segVal($('#win-transparency'));
+  const uiT = segVal($('#ui-transparency'));
   document.documentElement.style.setProperty('--win-alpha', (1 - winT / 100).toFixed(3));
   document.documentElement.style.setProperty('--ui-opacity', (1 - uiT / 100).toFixed(3));
   buildStarfield();
@@ -310,25 +346,19 @@ $('#thumb-size').addEventListener('input', (e) => {
 $('#video-bitrate').addEventListener('input', (e) => {
   $('#video-bitrate-label').textContent = e.target.value + ' Mbps';
 });
-$('#win-transparency').addEventListener('input', (e) => {
-  $('#win-transparency-label').textContent = e.target.value + '%';
-  applyAppearance();
-});
-$('#ui-transparency').addEventListener('input', (e) => {
-  $('#ui-transparency-label').textContent = e.target.value + '%';
-  applyAppearance();
-});
-$('#star-density').addEventListener('input', (e) => {
-  $('#star-density-label').textContent = e.target.value + '%';
-  applyAppearance();
-});
-$('#star-twinkle').addEventListener('input', (e) => {
-  $('#star-twinkle-label').textContent = e.target.value + '%';
-  applyAppearance();
-});
-$('#meteor-rate').addEventListener('input', (e) => {
-  $('#meteor-rate-label').textContent = e.target.value + '%';
-  applyAppearance();
+
+// ---- Appearance segmented controls ----
+['#win-transparency', '#ui-transparency', '#star-density', '#star-twinkle', '#meteor-rate'].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  el.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyAppearance();
+      scheduleSave();
+    });
+  });
 });
 
 // ---- Language picker ----
@@ -529,11 +559,11 @@ function collectConfig() {
     record_system_audio: $('#record-audio').checked,
     rec_position: recPosBtn ? recPosBtn.dataset.pos : 'top-left',
     close_to_tray: $('#close-to-tray').checked,
-    window_transparency: parseInt($('#win-transparency').value) || 0,
-    ui_transparency: parseInt($('#ui-transparency').value) || 0,
-    starfield_density: parseInt($('#star-density').value) || 50,
-    star_twinkle_speed: parseInt($('#star-twinkle').value) || 50,
-    meteor_rate: parseInt($('#meteor-rate').value) || 50,
+    window_transparency: segVal($('#win-transparency')),
+    ui_transparency: segVal($('#ui-transparency')),
+    starfield_density: segVal($('#star-density')),
+    star_twinkle_speed: segVal($('#star-twinkle')),
+    meteor_rate: segVal($('#meteor-rate')),
     language: ($('#lang-picker button.active') || { dataset: {} }).dataset.lang || 'en',
     hotkey_image: $('#hotkey-image').dataset.pending || $('#hotkey-image').value || 'CommandOrControl+Shift+S',
     hotkey_video: $('#hotkey-video').dataset.pending || $('#hotkey-video').value || 'CommandOrControl+Shift+V',
@@ -582,16 +612,11 @@ function applyConfig(cfg) {
   $('#save-thumbnail').checked = !!cfg.save_thumbnail;
   $('#record-audio').checked = cfg.record_system_audio !== false;
   $('#close-to-tray').checked = cfg.close_to_tray !== false;
-  $('#win-transparency').value = cfg.window_transparency ?? 0;
-  $('#win-transparency-label').textContent = (cfg.window_transparency ?? 0) + '%';
-  $('#ui-transparency').value = cfg.ui_transparency ?? 0;
-  $('#ui-transparency-label').textContent = (cfg.ui_transparency ?? 0) + '%';
-  $('#star-density').value = cfg.starfield_density ?? 50;
-  $('#star-density-label').textContent = (cfg.starfield_density ?? 50) + '%';
-  $('#star-twinkle').value = cfg.star_twinkle_speed ?? 50;
-  $('#star-twinkle-label').textContent = (cfg.star_twinkle_speed ?? 50) + '%';
-  $('#meteor-rate').value = cfg.meteor_rate ?? 50;
-  $('#meteor-rate-label').textContent = (cfg.meteor_rate ?? 50) + '%';
+  setSeg($('#win-transparency'), cfg.window_transparency ?? 0);
+  setSeg($('#ui-transparency'), cfg.ui_transparency ?? 0);
+  setSeg($('#star-density'), cfg.starfield_density ?? 50);
+  setSeg($('#star-twinkle'), cfg.star_twinkle_speed ?? 50);
+  setSeg($('#meteor-rate'), cfg.meteor_rate ?? 50);
   const lang = cfg.language === 'zh' ? 'zh' : 'en';
   langBtns.forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
   currentCfg = cfg;

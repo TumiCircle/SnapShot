@@ -301,6 +301,8 @@ unsafe fn get_foreground_window_info() -> Option<WindowInfo> {
         return None;
     }
 
+    // Note: Window::is_valid() rejects windows owned by the current process,
+    // so it must not be used for PixelSnap's own main window here.
     let window = Window::from_raw_hwnd(hwnd.0 as *mut std::ffi::c_void);
     if !window.is_valid() {
         return None;
@@ -344,10 +346,6 @@ unsafe fn get_main_window_info() -> Option<WindowInfo> {
     }
 
     let window = Window::from_raw_hwnd(hwnd.0 as *mut std::ffi::c_void);
-    if !window.is_valid() {
-        return None;
-    }
-
     let mut rect = RECT::default();
     if unsafe { GetWindowRect(hwnd, &mut rect) }.is_err() {
         return None;

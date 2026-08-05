@@ -70,17 +70,11 @@ body.show{
 .mt.video{background:#ffee78}
 .mt.motion{background:#ff6eb4}
 .mt.error{background:#ff4d6d}
-.gn{
+.msg{
   font-weight:bold;font-size:12px;
-  color:#7fffd4;
-  text-shadow:1px 1px 0 #0a0818;
+  color:#b8b2e8;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  letter-spacing:1px;
-}
-.fn{
-  font-size:13px;
-  color:#9b94d4;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  letter-spacing:0.5px;
 }
 .st{
   font-size:12px;
@@ -111,7 +105,7 @@ body.show{
 }
 </style></head><body>
 <div class="t"><div class="th"><img id="thumb" src=""></div>
-<div class="in"><div class="mt" id="mode">SNAP IMAGE</div><div class="gn" id="game"></div><div class="fn" id="file"></div><div class="st" id="status"><span class="dt"></span><span id="status-text">COMPLETED!</span></div></div></div>
+<div class="in"><div class="mt" id="mode">SNAP IMAGE</div><div class="msg" id="msg"></div><div class="st" id="status"><span class="dt"></span><span id="status-text">COMPLETED!</span></div></div></div>
 <script>
 var I18N = {
   en: {
@@ -154,8 +148,7 @@ function translateErrorZh(msg) {
 window.__setToastData = function(mode, game, fname, thumbB64, lang) {
   var d = I18N[lang === 'zh' ? 'zh' : 'en'] || I18N.en;
   var modeEl = document.getElementById('mode');
-  var gameEl = document.getElementById('game');
-  var fileEl = document.getElementById('file');
+  var msgEl = document.getElementById('msg');
   var thumbEl = document.getElementById('thumb');
   var modeMap = {
     'VIDEO': { cls: 'video', label: d.VIDEO },
@@ -166,8 +159,9 @@ window.__setToastData = function(mode, game, fname, thumbB64, lang) {
   var mi = modeMap[mode] || modeMap['IMAGE'];
   modeEl.textContent = mi.label;
   modeEl.className = 'mt' + (mi.cls ? ' ' + mi.cls : '');
-  gameEl.textContent = mode === 'ERROR' ? d.CAPTURE_FAILED : game;
-  fileEl.textContent = mode === 'ERROR' && lang === 'zh' ? translateErrorZh(fname) : fname;
+  msgEl.textContent = mode === 'ERROR'
+    ? (lang === 'zh' ? translateErrorZh(fname) : fname)
+    : fname;
   document.getElementById('status-text').textContent = mode === 'ERROR' ? d.FAILED : d.COMPLETED;
   document.getElementById('status').className = 'st' + (mode === 'ERROR' ? ' error' : '');
   thumbEl.src = 'data:image/png;base64,' + thumbB64;

@@ -5,64 +5,54 @@ use dirs::config_dir;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    // ---- Mode ----
     #[serde(default = "default_mode")]
     pub mode: String,
     #[serde(default = "default_capture_target")]
     pub capture_target: String,
-    #[serde(default = "default_true", alias = "hide_capture")]
-    pub hide_on_capture: bool,
+    // ---- Capture formats ----
     #[serde(default = "default_image_format")]
     pub image_format: String,
     #[serde(default = "default_quality")]
     pub jpeg_quality: u8,
-    #[serde(default = "default_vid_dur")]
-    pub video_duration: u32,
-    #[serde(default = "default_vid_fps")]
-    pub video_fps: u32,
     #[serde(default = "default_video_format")]
     pub video_format: String,
     #[serde(default = "default_video_bitrate")]
     pub video_bitrate: u32,
+    #[serde(default = "default_vid_dur")]
+    pub video_duration: u32,
+    #[serde(default = "default_vid_fps")]
+    pub video_fps: u32,
+    #[serde(default = "default_motion_format")]
+    pub motion_format: String,
     #[serde(default = "default_mot_dur")]
     pub motion_duration: u32,
     #[serde(default = "default_mot_fps")]
     pub motion_fps: u32,
-    #[serde(default = "default_motion_format")]
-    pub motion_format: String,
+    // ---- Output ----
     #[serde(default = "default_save_dir")]
     pub save_dir: String,
+    #[serde(default = "default_filename_prefix", alias = "file_prefix")]
+    pub filename_prefix: String,
+    #[serde(default = "default_thumb_size")]
+    pub thumbnail_size: u32,
+    #[serde(default = "default_false")]
+    pub save_thumbnail: bool,
+    // ---- Hotkeys ----
     #[serde(default = "default_hotkey_image")]
     pub hotkey_image: String,
     #[serde(default = "default_hotkey_video")]
     pub hotkey_video: String,
     #[serde(default = "default_hotkey_motion")]
     pub hotkey_motion: String,
-    #[serde(default = "default_true", alias = "sound_on")]
-    pub sound_enabled: bool,
-    #[serde(default = "default_toast_dur")]
-    pub toast_duration: u64,
-    #[serde(default = "default_thumb_size")]
-    pub thumbnail_size: u32,
-    #[serde(default = "default_false", alias = "auto_open")]
-    #[serde(alias = "auto_open_folder")]
-    pub auto_open_folder: bool,
-    #[serde(default = "default_false", alias = "start_tray")]
-    #[serde(alias = "start_to_tray")]
-    pub start_minimized: bool,
-    #[serde(default = "default_rec_position", alias = "rec_corner")]
-    pub rec_position: String,
-    #[serde(default = "default_filename_prefix", alias = "file_prefix")]
-    pub filename_prefix: String,
-    #[serde(default = "default_true", alias = "toast_on")]
-    pub show_toast: bool,
-    #[serde(default = "default_close_behavior")]
-    pub close_to_tray: bool,
-    #[serde(default = "default_false")]
-    pub save_thumbnail: bool,
+    // ---- Recording ----
     #[serde(default = "default_true", alias = "record_audio")]
     pub record_system_audio: bool,
     #[serde(default = "default_audio_bitrate")]
     pub audio_bitrate: u32,
+    #[serde(default = "default_rec_position", alias = "rec_corner")]
+    pub rec_position: String,
+    // ---- Appearance ----
     #[serde(default = "default_window_transparency")]
     pub window_transparency: u32,
     #[serde(default = "default_ui_transparency")]
@@ -75,6 +65,23 @@ pub struct AppConfig {
     pub meteor_rate: u32,
     #[serde(default = "default_language")]
     pub language: String,
+    // ---- Behavior ----
+    #[serde(default = "default_true", alias = "sound_on")]
+    pub sound_enabled: bool,
+    #[serde(default = "default_toast_dur")]
+    pub toast_duration: u64,
+    #[serde(default = "default_true", alias = "toast_on")]
+    pub show_toast: bool,
+    #[serde(default = "default_false", alias = "auto_open")]
+    #[serde(alias = "auto_open_folder")]
+    pub auto_open_folder: bool,
+    #[serde(default = "default_false", alias = "start_tray")]
+    #[serde(alias = "start_to_tray")]
+    pub start_minimized: bool,
+    #[serde(default = "default_true", alias = "hide_capture")]
+    pub hide_on_capture: bool,
+    #[serde(default = "default_close_behavior")]
+    pub close_to_tray: bool,
 }
 
 fn default_mode() -> String { "image".to_string() }
@@ -120,38 +127,38 @@ impl Default for AppConfig {
         Self {
             mode: default_mode(),
             capture_target: default_capture_target(),
-            hide_on_capture: default_true(),
             image_format: default_image_format(),
             jpeg_quality: default_quality(),
-            video_duration: default_vid_dur(),
-            video_fps: default_vid_fps(),
             video_format: default_video_format(),
             video_bitrate: default_video_bitrate(),
+            video_duration: default_vid_dur(),
+            video_fps: default_vid_fps(),
+            motion_format: default_motion_format(),
             motion_duration: default_mot_dur(),
             motion_fps: default_mot_fps(),
-            motion_format: default_motion_format(),
             save_dir: default_save_dir(),
+            filename_prefix: default_filename_prefix(),
+            thumbnail_size: default_thumb_size(),
+            save_thumbnail: default_false(),
             hotkey_image: default_hotkey_image(),
             hotkey_video: default_hotkey_video(),
             hotkey_motion: default_hotkey_motion(),
-            sound_enabled: default_true(),
-            toast_duration: default_toast_dur(),
-            thumbnail_size: default_thumb_size(),
-            auto_open_folder: default_false(),
-            start_minimized: default_false(),
-            rec_position: default_rec_position(),
-            filename_prefix: default_filename_prefix(),
-            show_toast: default_true(),
-            close_to_tray: default_close_behavior(),
-            save_thumbnail: default_false(),
             record_system_audio: default_true(),
             audio_bitrate: default_audio_bitrate(),
+            rec_position: default_rec_position(),
             window_transparency: default_window_transparency(),
             ui_transparency: default_ui_transparency(),
             starfield_density: default_starfield_density(),
             star_twinkle_speed: default_star_twinkle_speed(),
             meteor_rate: default_meteor_rate(),
             language: default_language(),
+            sound_enabled: default_true(),
+            toast_duration: default_toast_dur(),
+            show_toast: default_true(),
+            auto_open_folder: default_false(),
+            start_minimized: default_false(),
+            hide_on_capture: default_true(),
+            close_to_tray: default_close_behavior(),
         }
     }
 }
@@ -209,5 +216,27 @@ impl AppConfig {
         let cfg = Self::default();
         cfg.save()?;
         Ok(cfg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_json_fields_are_grouped_by_category() {
+        let json = serde_json::to_string(&AppConfig::default()).unwrap();
+        // Mode group first, then capture formats
+        assert!(json.contains(r#""mode":"image","capture_target":"auto","image_format":"png","jpeg_quality":90,"video_format":"mp4""#));
+        // Output group before hotkeys
+        let output_idx = json.find(r#""save_dir":"#).unwrap();
+        let hotkey_idx = json.find(r#""hotkey_image":"#).unwrap();
+        assert!(output_idx < hotkey_idx);
+        // Appearance group before behavior group
+        let appearance_idx = json.find(r#""window_transparency":"#).unwrap();
+        let behavior_idx = json.find(r#""sound_enabled":"#).unwrap();
+        assert!(appearance_idx < behavior_idx);
+        // Behavior group ends the file
+        assert!(json.trim_end().ends_with(r#""hide_on_capture":true,"close_to_tray":true}"#));
     }
 }
