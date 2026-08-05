@@ -92,14 +92,21 @@ fn show_toast(
     let game = game_name.to_string();
     let fname = file_name.to_string();
     let thumb = thumb_b64.to_string();
+    let lang = app
+        .state::<crate::AppState>()
+        .config
+        .lock()
+        .map(|c| c.language.clone())
+        .unwrap_or_else(|_| "en".to_string());
 
     if let Ok(win) = builder.build() {
         let eval_script = format!(
-            "__setToastData('{}','{}','{}','{}')",
+            "__setToastData('{}','{}','{}','{}','{}')",
             escape_js_string(&mode),
             escape_js_string(&game),
             escape_js_string(&fname),
             escape_js_string(&thumb),
+            escape_js_string(&lang),
         );
 
         let win_for_eval = win.clone();

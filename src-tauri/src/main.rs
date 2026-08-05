@@ -95,6 +95,10 @@ fn merge_and_validate_config(
     config.starfield_density = config.starfield_density.clamp(0, 100);
     config.star_twinkle_speed = config.star_twinkle_speed.clamp(0, 100);
     config.meteor_rate = config.meteor_rate.clamp(0, 100);
+    config.language = match config.language.as_str() {
+        "zh" => "zh".to_string(),
+        _ => "en".to_string(),
+    };
     Ok(config)
 }
 
@@ -768,5 +772,26 @@ mod tests {
         assert_eq!(fresh.starfield_density, 50);
         assert_eq!(fresh.star_twinkle_speed, 50);
         assert_eq!(fresh.meteor_rate, 50);
+    }
+
+    #[test]
+    fn language_is_normalized() {
+        let current = base_config();
+        let merged = merge_and_validate_config(
+            &current,
+            serde_json::json!({ "language": "zh" }),
+        )
+        .unwrap();
+        assert_eq!(merged.language, "zh");
+
+        let merged = merge_and_validate_config(
+            &current,
+            serde_json::json!({ "language": "fr" }),
+        )
+        .unwrap();
+        assert_eq!(merged.language, "en");
+
+        let fresh = merge_and_validate_config(&current, serde_json::json!({})).unwrap();
+        assert_eq!(fresh.language, "en");
     }
 }

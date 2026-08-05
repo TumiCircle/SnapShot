@@ -73,6 +73,8 @@ pub struct AppConfig {
     pub star_twinkle_speed: u32,
     #[serde(default = "default_meteor_rate")]
     pub meteor_rate: u32,
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 fn default_mode() -> String { "image".to_string() }
@@ -99,6 +101,7 @@ fn default_ui_transparency() -> u32 { 0 }
 fn default_starfield_density() -> u32 { 50 }
 fn default_star_twinkle_speed() -> u32 { 50 }
 fn default_meteor_rate() -> u32 { 50 }
+fn default_language() -> String { "en".to_string() }
 fn default_hotkey_image() -> String { "CommandOrControl+Shift+S".to_string() }
 fn default_hotkey_video() -> String { "CommandOrControl+Shift+V".to_string() }
 fn default_hotkey_motion() -> String { "CommandOrControl+Shift+M".to_string() }
@@ -148,6 +151,7 @@ impl Default for AppConfig {
             starfield_density: default_starfield_density(),
             star_twinkle_speed: default_star_twinkle_speed(),
             meteor_rate: default_meteor_rate(),
+            language: default_language(),
         }
     }
 }
@@ -184,6 +188,10 @@ impl AppConfig {
         cfg.starfield_density = cfg.starfield_density.clamp(0, 100);
         cfg.star_twinkle_speed = cfg.star_twinkle_speed.clamp(0, 100);
         cfg.meteor_rate = cfg.meteor_rate.clamp(0, 100);
+        cfg.language = match cfg.language.as_str() {
+            "zh" => "zh".to_string(),
+            _ => "en".to_string(),
+        };
         Ok(cfg)
     }
 
