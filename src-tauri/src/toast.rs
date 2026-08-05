@@ -40,13 +40,19 @@ pub fn show_toast_on_main(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "completed".to_string());
 
-    show_toast(app, mode_str, game_name, &file_name, &thumb_b64, duration_ms);
+    show_toast(app, mode_str, game_name, &file_name, &thumb_b64, duration_ms, "completed");
 }
 
 /// Shows an error toast with the raw Rust error message so failures (window
 /// lost, encode timeout, save failure, disk full, ...) are visible to the user.
 pub fn show_error_toast(app: &AppHandle, message: &str) {
-    show_toast(app, "ERROR", "CAPTURE FAILED", message, "", 5000);
+    show_toast(app, "ERROR", "CAPTURE FAILED", message, "", 5000, "error");
+}
+
+/// Shows an immediate, short-lived toast as soon as a capture starts, so the
+/// user gets instant feedback when triggering a hotkey.
+pub fn show_start_toast(app: &AppHandle, mode_str: &str) {
+    show_toast(app, mode_str, "", "", "", 900, "started");
 }
 
 fn show_toast(
@@ -56,6 +62,7 @@ fn show_toast(
     file_name: &str,
     thumb_b64: &str,
     duration_ms: u64,
+    status: &str,
 ) {
     close_old_toasts(app);
 
@@ -92,6 +99,7 @@ fn show_toast(
     let game = game_name.to_string();
     let fname = file_name.to_string();
     let thumb = thumb_b64.to_string();
+    let status = status.to_string();
     let lang = app
         .state::<crate::AppState>()
         .config
@@ -101,12 +109,13 @@ fn show_toast(
 
     if let Ok(win) = builder.build() {
         let eval_script = format!(
-            "__setToastData('{}','{}','{}','{}','{}')",
+            "__setToastData('{}','{}','{}','{}','{}','{}')",
             escape_js_string(&mode),
             escape_js_string(&game),
             escape_js_string(&fname),
             escape_js_string(&thumb),
             escape_js_string(&lang),
+            escape_js_string(&status),
         );
 
         let win_for_eval = win.clone();

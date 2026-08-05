@@ -91,18 +91,18 @@ body {
 
 /* Meteor shower */
 @keyframes meteorFall {
-  0% { transform: translate(0, 0) rotate(45deg); opacity: 0; }
+  0% { transform: translate(0, 0); opacity: 0; }
   4% { opacity: 1; }
-  100% { transform: translate(90vw, 90vh) rotate(45deg); opacity: 0; }
+  100% { transform: translate(90vw, 90vh); opacity: 0; }
 }
 .meteor {
   position: absolute;
-  width: 180px;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--accent-mint), #fff);
-  box-shadow: 0 0 6px var(--accent-mint), 0 0 12px rgba(127,255,212,0.4);
   pointer-events: none;
   opacity: 0;
+}
+.meteor-seg {
+  position: absolute;
+  image-rendering: pixelated;
 }
 
 .scanlines::after {
@@ -340,6 +340,14 @@ body {
 .set-val {
   font-family: 'Press Start 2P', monospace; font-size: 9px;
   color: var(--accent-yellow); min-width: 56px; text-align: right; flex-shrink: 0;
+}
+.set-val.pop {
+  animation: valPop 0.12s steps(2);
+}
+@keyframes valPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
 }
 .set-row input[type=range] { flex: 1; accent-color: var(--accent-mint); }
 .set-row .pixel-input { flex: 1; }
@@ -608,48 +616,28 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
     <label class="pixel-label" data-i18n="appearance">▸ APPEARANCE</label>
     <div class="set-row">
       <span class="set-label" data-i18n="windowTransparency">WINDOW TRANSPARENCY</span>
-      <div class="segmented grow" id="win-transparency">
-        <button data-val="0" class="active" data-i18n="off">OFF</button>
-        <button data-val="30" data-i18n="low">LOW</button>
-        <button data-val="60" data-i18n="med">MED</button>
-        <button data-val="90" data-i18n="high">HIGH</button>
-      </div>
+      <input type="range" class="stepped" id="win-transparency" min="0" max="75" step="25" value="0">
+      <span class="set-val" id="win-transparency-label">OFF</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="uiTransparency">UI TRANSPARENCY</span>
-      <div class="segmented grow" id="ui-transparency">
-        <button data-val="0" class="active" data-i18n="off">OFF</button>
-        <button data-val="30" data-i18n="low">LOW</button>
-        <button data-val="60" data-i18n="med">MED</button>
-        <button data-val="90" data-i18n="high">HIGH</button>
-      </div>
+      <input type="range" class="stepped" id="ui-transparency" min="0" max="75" step="25" value="0">
+      <span class="set-val" id="ui-transparency-label">OFF</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="starfieldDensity">STARFIELD DENSITY</span>
-      <div class="segmented grow" id="star-density">
-        <button data-val="0" data-i18n="off">OFF</button>
-        <button data-val="25" data-i18n="low">LOW</button>
-        <button data-val="50" class="active" data-i18n="med">MED</button>
-        <button data-val="75" data-i18n="high">HIGH</button>
-      </div>
+      <input type="range" class="stepped" id="star-density" min="0" max="75" step="25" value="50">
+      <span class="set-val" id="star-density-label">MED</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="starTwinkleSpeed">STAR TWINKLE SPEED</span>
-      <div class="segmented grow" id="star-twinkle">
-        <button data-val="0" data-i18n="off">OFF</button>
-        <button data-val="25" data-i18n="low">LOW</button>
-        <button data-val="50" class="active" data-i18n="med">MED</button>
-        <button data-val="75" data-i18n="high">HIGH</button>
-      </div>
+      <input type="range" class="stepped" id="star-twinkle" min="0" max="75" step="25" value="50">
+      <span class="set-val" id="star-twinkle-label">MED</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="meteorRate">METEOR RATE</span>
-      <div class="segmented grow" id="meteor-rate">
-        <button data-val="0" data-i18n="off">OFF</button>
-        <button data-val="25" data-i18n="low">LOW</button>
-        <button data-val="50" class="active" data-i18n="med">MED</button>
-        <button data-val="75" data-i18n="high">HIGH</button>
-      </div>
+      <input type="range" class="stepped" id="meteor-rate" min="0" max="75" step="25" value="50">
+      <span class="set-val" id="meteor-rate-label">MED</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="language">LANGUAGE</span>

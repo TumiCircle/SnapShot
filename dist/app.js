@@ -17,28 +17,27 @@ function clampInt(v, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
 }
 
-function segVal(el) {
-  if (!el) return 0;
-  const b = el.querySelector('button.active');
-  return b ? parseInt(b.dataset.val, 10) : 0;
+// Discrete tier mapping for stepped sliders: 0/25/50/75 -> OFF/LOW/MED/HIGH
+function tierKey(v) {
+  if (v <= 12) return 'off';
+  if (v <= 37) return 'low';
+  if (v <= 62) return 'med';
+  return 'high';
 }
 
-function setSeg(el, val) {
-  if (!el) return;
-  let best = null;
-  let bestDiff = Infinity;
-  el.querySelectorAll('button').forEach(b => {
-    const v = parseInt(b.dataset.val, 10);
-    const diff = Math.abs(v - val);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = b;
-    }
-  });
-  if (best) {
-    el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-    best.classList.add('active');
-  }
+function updateTierLabel(inputId, labelId) {
+  const input = $(inputId);
+  const label = $(labelId);
+  if (!input || !label) return;
+  label.textContent = t(tierKey(parseInt(input.value, 10)));
+}
+
+function refreshTierLabels() {
+  updateTierLabel('#win-transparency', '#win-transparency-label');
+  updateTierLabel('#ui-transparency', '#ui-transparency-label');
+  updateTierLabel('#star-density', '#star-density-label');
+  updateTierLabel('#star-twinkle', '#star-twinkle-label');
+  updateTierLabel('#meteor-rate', '#meteor-rate-label');
 }
 
 // ---- i18n ----
@@ -186,6 +185,7 @@ function applyLanguage() {
   });
   const sbText = $('#sb-text');
   if (sbText && !sbText.dataset.busy) sbText.textContent = t('systemOnline');
+  refreshTierLabels();
 }
 
 function translateError(msg) {
@@ -211,8 +211,8 @@ function translateError(msg) {
 function buildStarfield() {
   const sf = $('#starfield');
   if (!sf) return;
-  const density = segVal($('#star-density'));
-  const twinkle = segVal($('#star-twinkle'));
+  const density = clampInt($('#star-density').value, 0, 100);
+  const twinkle = clampInt($('#star-twinkle').value, 0, 100);
   const count = Math.round(20 + density * 0.8);
   sf.innerHTML = '';
   const palette = [null, null, null, 'mint', 'pink', 'yellow'];
@@ -246,7 +246,7 @@ function startMeteors() {
     clearInterval(meteorTimer);
     meteorTimer = null;
   }
-  const rate = segVal($('#meteor-rate'));
+  const rate = clampInt($('#meteor-rate').value, 0, 100);
   if (rate <= 0) return;
   const interval = Math.round(5200 - rate * 42);
   function makeMeteor() {
@@ -256,12 +256,25 @@ function startMeteors() {
     m.style.left = Math.random() * 100 + '%';
     m.style.animation = 'meteorFall ' + (Math.random() * 0.5 + 0.9).toFixed(2) + 's linear forwards';
     m.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
-    if (Math.random() > 0.5) {
-      m.style.background = 'linear-gradient(90deg, transparent, rgba(255,110,180,0.7) 72%, #fff)';
-      m.style.boxShadow = '0 0 8px 1px rgba(255,110,180,0.85), 0 0 22px 2px rgba(255,110,180,0.35)';
-    } else {
-      m.style.background = 'linear-gradient(90deg, transparent, rgba(127,255,212,0.7) 72%, #fff)';
-      m.style.boxShadow = '0 0 8px 1px rgba(127,255,212,0.85), 0 0 22px 2px rgba(127,255,212,0.35)';
+    const pink = Math.random() > 0.5;
+    const main = pink ? '255,110,180' : '127,255,212';
+    // Pixel-art trail: a chain of squares running from top-left (tail) to
+    // bottom-right (head), matching the meteor's down-right flight direction.
+    const segs = 7;
+    for (let i = 0; i < segs; i++) {
+      const s = document.createElement('div');
+      s.className = 'meteor-seg';
+      const size = 6 - Math.floor(i * 0.6); // 6..3 px
+      s.style.width = size + 'px';
+      s.style.height = size + 'px';
+      s.style.left = (i * 6) + 'px';
+      s.style.top = (i * 6) + 'px';
+      s.style.background = i === segs - 1 ? '#fff' : 'rgb(' + main + ')';
+      s.style.opacity = (1 - i / segs).toFixed(2);
+      if (i === segs - 1) {
+        s.style.boxShadow = '0 0 6px 2px rgba(' + main + ',0.9)';
+      }
+      m.appendChild(s);
     }
     sf.appendChild(m);
     setTimeout(() => m.remove(), 2000);
@@ -273,8 +286,8 @@ function startMeteors() {
 
 // ---- Appearance (window/UI transparency + starfield) ----
 function applyAppearance() {
-  const winT = segVal($('#win-transparency'));
-  const uiT = segVal($('#ui-transparency'));
+  const winT = clampInt($('#win-transparency').value, 0, 100);
+  const uiT = clampInt($('#ui-transparency').value, 0, 100);
   document.documentElement.style.setProperty('--win-alpha', (1 - winT / 100).toFixed(3));
   document.documentElement.style.setProperty('--ui-opacity', (1 - uiT / 100).toFixed(3));
   buildStarfield();
@@ -347,17 +360,23 @@ $('#video-bitrate').addEventListener('input', (e) => {
   $('#video-bitrate-label').textContent = e.target.value + ' Mbps';
 });
 
-// ---- Appearance segmented controls ----
-['#win-transparency', '#ui-transparency', '#star-density', '#star-twinkle', '#meteor-rate'].forEach(id => {
-  const el = $(id);
+// ---- Appearance stepped sliders (discrete tiers with snap feedback) ----
+[['#win-transparency', '#win-transparency-label'],
+ ['#ui-transparency', '#ui-transparency-label'],
+ ['#star-density', '#star-density-label'],
+ ['#star-twinkle', '#star-twinkle-label'],
+ ['#meteor-rate', '#meteor-rate-label']].forEach(([inputId, labelId]) => {
+  const el = $(inputId);
   if (!el) return;
-  el.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      applyAppearance();
-      scheduleSave();
-    });
+  el.addEventListener('input', () => {
+    updateTierLabel(inputId, labelId);
+    const label = $(labelId);
+    if (label) {
+      label.classList.remove('pop');
+      void label.offsetWidth; // restart the pop animation
+      label.classList.add('pop');
+    }
+    applyAppearance();
   });
 });
 
@@ -559,11 +578,11 @@ function collectConfig() {
     record_system_audio: $('#record-audio').checked,
     rec_position: recPosBtn ? recPosBtn.dataset.pos : 'top-left',
     close_to_tray: $('#close-to-tray').checked,
-    window_transparency: segVal($('#win-transparency')),
-    ui_transparency: segVal($('#ui-transparency')),
-    starfield_density: segVal($('#star-density')),
-    star_twinkle_speed: segVal($('#star-twinkle')),
-    meteor_rate: segVal($('#meteor-rate')),
+    window_transparency: clampInt($('#win-transparency').value, 0, 100),
+    ui_transparency: clampInt($('#ui-transparency').value, 0, 100),
+    starfield_density: clampInt($('#star-density').value, 0, 100),
+    star_twinkle_speed: clampInt($('#star-twinkle').value, 0, 100),
+    meteor_rate: clampInt($('#meteor-rate').value, 0, 100),
     language: ($('#lang-picker button.active') || { dataset: {} }).dataset.lang || 'en',
     hotkey_image: $('#hotkey-image').dataset.pending || $('#hotkey-image').value || 'CommandOrControl+Shift+S',
     hotkey_video: $('#hotkey-video').dataset.pending || $('#hotkey-video').value || 'CommandOrControl+Shift+V',
@@ -612,11 +631,12 @@ function applyConfig(cfg) {
   $('#save-thumbnail').checked = !!cfg.save_thumbnail;
   $('#record-audio').checked = cfg.record_system_audio !== false;
   $('#close-to-tray').checked = cfg.close_to_tray !== false;
-  setSeg($('#win-transparency'), cfg.window_transparency ?? 0);
-  setSeg($('#ui-transparency'), cfg.ui_transparency ?? 0);
-  setSeg($('#star-density'), cfg.starfield_density ?? 50);
-  setSeg($('#star-twinkle'), cfg.star_twinkle_speed ?? 50);
-  setSeg($('#meteor-rate'), cfg.meteor_rate ?? 50);
+  $('#win-transparency').value = cfg.window_transparency ?? 0;
+  $('#ui-transparency').value = cfg.ui_transparency ?? 0;
+  $('#star-density').value = cfg.starfield_density ?? 50;
+  $('#star-twinkle').value = cfg.star_twinkle_speed ?? 50;
+  $('#meteor-rate').value = cfg.meteor_rate ?? 50;
+  refreshTierLabels();
   const lang = cfg.language === 'zh' ? 'zh' : 'en';
   langBtns.forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
   currentCfg = cfg;

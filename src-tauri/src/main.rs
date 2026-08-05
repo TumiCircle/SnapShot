@@ -147,12 +147,14 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
     let config_arc = app.state::<AppState>().config.clone();
     let app_owned = app.clone();
     let completed = Arc::new(AtomicBool::new(false));
+    let started_mode = capture_mode.clone();
 
     capture::start_capture(&cfg, Some(&capture_mode), move |event| {
         let a = app_owned.clone();
         let cfg_arc = config_arc.clone();
         let comp = completed.clone();
         let for_thread = a.clone();
+        let started_label = started_mode.clone();
         let _ = a.run_on_main_thread(move || {
             let a_inner = for_thread;
             let main_window = a_inner.get_webview_window("main");
@@ -160,6 +162,12 @@ fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window:
 
             match event {
                 capture::CaptureEvent::Started(is_dynamic) => {
+                    let mode_label = match started_label.as_str() {
+                        "video" => "VIDEO",
+                        "motion" => "MOTION",
+                        _ => "IMAGE",
+                    };
+                    toast::show_start_toast(&a_inner, mode_label);
                     if let Some(w) = &main_window {
                         let _ = w.emit("capture-started", is_dynamic);
                     }
