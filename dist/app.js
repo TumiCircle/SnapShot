@@ -285,7 +285,7 @@ function collectConfig() {
     motion_duration: parseInt($('#mot-dur').value) || 3,
     motion_fps: parseInt($('#mot-fps').value) || 15,
     save_dir: $('#save-dir').value || '',
-    filename_prefix: $('#filename-prefix').value || 'snap',
+    filename_prefix: $('#filename-prefix').value.trim(),
     thumbnail_size: parseInt($('#thumb-size').value) || 128,
     show_toast: $('#show-toast').checked,
     toast_duration: parseInt($('#toast-dur').value) || 2500,
@@ -330,7 +330,7 @@ function applyConfig(cfg) {
   $('#mot-dur').value = cfg.motion_duration || 3;
   $('#mot-fps').value = cfg.motion_fps || 15;
   $('#save-dir').value = cfg.save_dir || '';
-  $('#filename-prefix').value = cfg.filename_prefix || 'snap';
+  $('#filename-prefix').value = cfg.filename_prefix || '';
   $('#thumb-size').value = cfg.thumbnail_size || 128;
   $('#thumb-size-label').textContent = (cfg.thumbnail_size || 128) + 'px';
   $('#show-toast').checked = cfg.show_toast !== false;

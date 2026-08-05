@@ -152,6 +152,7 @@ impl AppConfig {
         if cfg.save_dir.trim().is_empty() {
             cfg.save_dir = default_save_dir();
         }
+        cfg.filename_prefix = cfg.filename_prefix.trim().to_string();
         cfg.image_format = match cfg.image_format.to_lowercase().as_str() {
             "jpg" | "jpeg" => "jpg".to_string(),
             _ => "png".to_string(),

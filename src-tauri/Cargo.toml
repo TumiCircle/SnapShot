@@ -13,6 +13,7 @@ image = { version = "0.25", features = ["png", "ico"] }
 [dependencies]
 tauri = { version = "2.0", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2.0"
+tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2.0"
 tauri-plugin-shell = "2.0"
 serde = { version = "1", features = ["derive"] }
@@ -27,11 +28,14 @@ windows = { version = "0.62", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",
     "Win32_UI_HiDpi",
+    "Win32_System_Performance",
     "Win32_Storage_Xps",
     "Win32_Graphics_Dwm",
 ] }
 windows-capture = "2.0.0"
 image = { version = "0.25", features = ["png", "jpeg", "gif", "ico"] }
+gif = "0.14"
+color_quant = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5"

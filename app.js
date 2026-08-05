@@ -1,12 +1,16 @@
-const { invoke } = window.__TAURI__.core;
-const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
-const { listen } = window.__TAURI__.event;
-
+// ============ PixelSnap App Logic ============
+const TAURI = window.__TAURI__;
+const invoke = TAURI ? TAURI.core.invoke : async () => {};
+const event = TAURI ? TAURI.event : null;
 const $ = (sel) => document.querySelector(sel);
-let currentCfg = null;
-let isCapturing = false;
-const mainWindow = getCurrentWebviewWindow();
+const $$ = (sel) => document.querySelectorAll(sel);
 
+let activeMode = 'image';
+let activeFmt = 'png';
+let activeRecPos = 'top-left';
+let cooldown = false;
+
+// ---- Starfield (50 twinkling stars) ----
 (function buildStars() {
   const sf = $('#starfield');
   if (!sf) return;
@@ -21,77 +25,128 @@ const mainWindow = getCurrentWebviewWindow();
   }
 })();
 
-let activeMode = 'image';
-let activeFmt = 'png';
-let activeMotionFmt = 'gif';
+// ---- Meteor shower ----
+(function spawnMeteors() {
+  const sf = $('#starfield');
+  if (!sf) return;
+  function makeMeteor() {
+    const m = document.createElement('div');
+    m.className = 'meteor';
+    m.style.top = Math.random() * -30 + '%';
+    m.style.left = Math.random() * 120 + 20 + '%';
+    m.style.animation = 'meteorFall ' + (Math.random() * 0.6 + 0.8) + 's linear forwards';
+    if (Math.random() > 0.5) {
+      m.style.background = 'linear-gradient(90deg, transparent, var(--accent-pink), #fff)';
+      m.style.boxShadow = '0 0 6px var(--accent-pink), 0 0 12px rgba(255,110,180,0.4)';
+    } else {
+      m.style.background = 'linear-gradient(90deg, transparent, var(--accent-mint), #fff)';
+      m.style.boxShadow = '0 0 6px var(--accent-mint), 0 0 12px rgba(127,255,212,0.4)';
+    }
+    sf.appendChild(m);
+    setTimeout(() => m.remove(), 1600);
+  }
+  setInterval(() => {
+    if (Math.random() > 0.35) makeMeteor();
+  }, 2200);
+})();
 
-const modeBlocks = document.querySelectorAll('.mode-block');
+// ---- Mode block selection ----
+const modeBlocks = $$('.mode-block');
 modeBlocks.forEach(block => {
   const head = block.querySelector('.mode-head');
   head.addEventListener('click', () => {
     activeMode = block.dataset.mode;
     modeBlocks.forEach(b => b.classList.remove('active'));
     block.classList.add('active');
-    updateTags();
-    saveConfig();
+    scheduleSave();
   });
 });
 
-function updateTags() {
-  const motionTag = document.getElementById('motion-tag');
-  const videoTag = document.getElementById('video-tag');
-  if (motionTag) motionTag.textContent = activeMotionFmt.toUpperCase();
-  if (videoTag) videoTag.textContent = 'AVI';
+// ---- Format picker (PNG/JPG) ----
+const fmtBtns = $$('#fmt-picker button');
+const imgTag = $('#image-tag');
+const jpgQualityRow = $('#jpg-quality-row');
+
+function updateFmtUI() {
+  fmtBtns.forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`#fmt-picker button[data-fmt="${activeFmt}"]`);
+  if (btn) btn.classList.add('active');
+  if (imgTag) imgTag.textContent = activeFmt.toUpperCase();
+  if (jpgQualityRow) {
+    jpgQualityRow.style.opacity = activeFmt === 'jpg' ? '1' : '0.45';
+    jpgQualityRow.style.pointerEvents = activeFmt === 'jpg' ? 'auto' : 'none';
+  }
 }
 
-const fmtBtns = document.querySelectorAll('#fmt-picker button');
-const jpgQualityRow = document.getElementById('jpg-quality-row');
 fmtBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     fmtBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     activeFmt = btn.dataset.fmt;
-    jpgQualityRow.style.opacity = btn.dataset.fmt === 'jpg' ? '1' : '0.45';
-    saveConfig();
+    updateFmtUI();
+    scheduleSave();
   });
 });
-jpgQualityRow.style.opacity = '0.45';
 
-const motionFmtBtns = document.querySelectorAll('#motion-fmt-picker button');
-motionFmtBtns.forEach(btn => {
+// ---- JPG quality slider ----
+$('#quality').addEventListener('input', (e) => {
+  $('#qv').textContent = e.target.value;
+  scheduleSave();
+});
+
+// ---- Rec position picker ----
+const recPosBtns = $$('#rec-pos-picker button');
+recPosBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    motionFmtBtns.forEach(b => b.classList.remove('active'));
+    recPosBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    activeMotionFmt = btn.dataset.mfmt;
-    updateTags();
-    saveConfig();
+    activeRecPos = btn.dataset.pos;
+    scheduleSave();
   });
 });
 
-document.getElementById('quality').addEventListener('input', (e) => {
-  document.getElementById('qv').textContent = e.target.value;
-  saveConfig();
+// ---- Sliders ----
+$('#toast-dur').addEventListener('input', (e) => {
+  $('#toast-dur-label').textContent = (e.target.value / 1000).toFixed(1) + 's';
 });
-document.getElementById('toast-dur').addEventListener('input', (e) => {
-  document.getElementById('toast-dur-label').textContent = (e.target.value / 1000).toFixed(1) + 's';
-  saveConfig();
+$('#thumb-size').addEventListener('input', (e) => {
+  $('#thumb-size-label').textContent = e.target.value + 'px';
 });
-['vid-dur','vid-fps','mot-dur','mot-fps'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('change', saveConfig);
+$('#ui-opacity').addEventListener('input', (e) => {
+  const val = e.target.value;
+  $('#ui-opacity-label').textContent = val + '%';
+  document.body.style.setProperty('--ui-opacity', (val / 100).toString());
 });
-document.getElementById('sound-on').addEventListener('change', saveConfig);
-document.getElementById('save-dir').addEventListener('change', saveConfig);
 
-let recordingHotkey = false;
-const hotkeyInput = document.getElementById('hotkey');
-const hotkeyWrap = document.getElementById('hotkey-wrap');
-hotkeyInput.addEventListener('click', () => {
-  recordingHotkey = true;
-  hotkeyWrap.classList.add('recording');
-  hotkeyInput.value = 'RECORDING... press combo';
-  hotkeyInput.style.color = 'var(--accent-pink)';
+// ---- Hotkey recording ----
+let recordingHotkey = null;
+
+function startRecording(wrap, input) {
+  if (recordingHotkey) stopRecording(recordingHotkey, false);
+  recordingHotkey = wrap;
+  wrap.classList.add('recording');
+  input.value = 'RECORDING...';
+  input.style.color = '';
+}
+function stopRecording(wrap, success) {
+  wrap.classList.remove('recording');
+  if (!success && wrap.querySelector('input').dataset.pending) {
+    wrap.querySelector('input').value = wrap.querySelector('input').dataset.pending;
+  }
+  wrap.querySelector('input').dataset.pending = '';
+  if (recordingHotkey === wrap) recordingHotkey = null;
+}
+
+$('#hotkey-image').addEventListener('click', function() {
+  startRecording($('#hk-image-wrap'), this);
 });
+$('#hotkey-video').addEventListener('click', function() {
+  startRecording($('#hk-video-wrap'), this);
+});
+$('#hotkey-motion').addEventListener('click', function() {
+  startRecording($('#hk-motion-wrap'), this);
+});
+
 window.addEventListener('keydown', (e) => {
   if (!recordingHotkey) return;
   e.preventDefault();
@@ -101,67 +156,230 @@ window.addEventListener('keydown', (e) => {
   if (e.altKey) parts.push('Alt');
   if (e.shiftKey) parts.push('Shift');
   const key = e.key;
-  const modifiers = ['Control','Meta','Alt','Shift'];
+  const modifiers = ['Control', 'Meta', 'Alt', 'Shift'];
   if (!modifiers.includes(key)) {
     let k = key;
     if (k === ' ') k = 'Space';
     if (k.length === 1) k = k.toUpperCase();
     parts.push(k);
+    const input = recordingHotkey.querySelector('input');
     if (parts.length < 2) {
-      hotkeyInput.value = parts.join('+') + ' (need modifier)';
+      input.value = parts.join('+') + ' (need modifier)';
       return;
     }
-    const accelerator = parts.join('+').replace('Control','CommandOrControl');
-    hotkeyInput.value = accelerator;
-    recordingHotkey = false;
-    hotkeyWrap.classList.remove('recording');
-    hotkeyInput.style.color = '';
-    saveConfig();
+    let accelerator = parts.join('+').replace('Control', 'CommandOrControl');
+    input.value = accelerator;
+    input.dataset.pending = accelerator;
+    stopRecording(recordingHotkey, true);
+    scheduleSave();
   }
 });
 
-document.getElementById('btn-close').addEventListener('click', () => { mainWindow.hide(); });
-document.getElementById('btn-min').addEventListener('click', () => { mainWindow.minimize(); });
+// ---- Title bar buttons ----
+$('#btn-min').addEventListener('click', () => {
+  invoke('minimize_window').catch(() => {});
+});
+$('#btn-close').addEventListener('click', () => {
+  invoke('close_window').catch(() => {});
+});
 
-document.getElementById('btn-browse').addEventListener('click', async () => {
+// ---- Open folder ----
+$('#btn-open').addEventListener('click', () => {
+  invoke('open_save_folder').catch(() => {});
+});
+
+// ---- Browse folder ----
+$('#btn-browse').addEventListener('click', async () => {
   try {
-    const selected = await invoke('select_folder');
-    if (selected) {
-      document.getElementById('save-dir').value = selected;
-      saveConfig();
+    let selected = null;
+    if (TAURI && TAURI.dialog) {
+      selected = await TAURI.dialog.open({ directory: true, title: 'Select Save Folder' });
     }
-  } catch(e) { console.error(e); }
-});
-document.getElementById('btn-open').addEventListener('click', () => {
-  const path = document.getElementById('save-dir').value;
-  if (path) invoke('open_folder', { path });
-});
-
-const snapBtn = document.getElementById('btn-snap-test');
-snapBtn.addEventListener('click', async () => {
-  if (isCapturing) return;
-  isCapturing = true;
-  snapBtn.textContent = '...';
-  snapBtn.classList.add('recording');
-  try {
-    await invoke('take_screenshot');
+    if (selected) {
+      const path = typeof selected === 'string' ? selected : (Array.isArray(selected) ? selected[0] : null);
+      if (path) {
+        $('#save-dir').value = path;
+        scheduleSave();
+      }
+    }
   } catch(e) {
-    console.error('Screenshot failed:', e);
-    isCapturing = false;
-    snapBtn.textContent = 'SNAP!';
-    snapBtn.classList.remove('recording');
-    setStatus('ERROR');
-    setTimeout(() => setStatus('READY'), 2000);
+    invoke('browse_folder').then(dir => {
+      if (dir) {
+        $('#save-dir').value = dir;
+        scheduleSave();
+      }
+    }).catch(() => {});
   }
 });
 
-function resetSnapBtn() {
-  isCapturing = false;
-  snapBtn.textContent = 'SNAP!';
-  snapBtn.classList.remove('recording');
+// ---- Reset button ----
+$('#btn-reset').addEventListener('click', () => {
+  if (!confirm('Reset all settings to defaults?')) return;
+  invoke('reset_config').then(cfg => {
+    applyConfig(cfg);
+    scheduleSave();
+  }).catch(() => {});
+});
+
+// ---- SNAP Button ----
+const snapBtn = $('#btn-snap-test');
+snapBtn.addEventListener('click', () => {
+  if (cooldown) return;
+  cooldown = true;
+  setTimeout(() => cooldown = false, 500);
+  const origText = snapBtn.textContent;
+  const sbDot = $('#sb-dot');
+  const sbText = $('#sb-text');
+  snapBtn.textContent = 'SNAPPING...';
+  snapBtn.classList.add('recording');
+  if (sbDot) sbDot.classList.add('rec');
+  if (sbText) sbText.textContent = 'CAPTURING...';
+  invoke('take_screenshot', { mode: activeMode, hideWindow: true })
+    .then(() => {
+      snapBtn.textContent = 'COMPLETED';
+      setTimeout(() => {
+        snapBtn.textContent = origText;
+        snapBtn.classList.remove('recording');
+      }, 1000);
+    })
+    .catch((err) => {
+      snapBtn.textContent = 'ERROR';
+      snapBtn.classList.remove('recording');
+      snapBtn.style.background = 'var(--accent-red)';
+      if (sbDot) sbDot.classList.remove('rec');
+      if (sbText) sbText.textContent = 'ERROR';
+      setTimeout(() => {
+        snapBtn.textContent = origText;
+        snapBtn.style.background = '';
+        if (sbText) sbText.textContent = 'SYSTEM ONLINE';
+      }, 2000);
+    });
+});
+
+// ---- Tauri events ----
+let saveTimer;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSaveConfig, 400);
+}
+async function doSaveConfig() {
+  try {
+    await invoke('save_config', { config: collectConfig() });
+  } catch(e) { console.error('Save config failed:', e); }
 }
 
-document.querySelectorAll('input[type=number]').forEach(inp => {
+// Auto-save on changes
+document.addEventListener('change', scheduleSave);
+document.addEventListener('input', (e) => {
+  if (e.target.type === 'range' || e.target.type === 'text' || e.target.type === 'number' || e.target.type === 'checkbox') scheduleSave();
+});
+
+function collectConfig() {
+  const recPosBtn = $('#rec-pos-picker button.active');
+  return {
+    mode: activeMode,
+    image_format: activeFmt,
+    jpeg_quality: parseInt($('#quality').value) || 90,
+    video_duration: parseInt($('#vid-dur').value) || 3,
+    video_fps: parseInt($('#vid-fps').value) || 30,
+    motion_duration: parseInt($('#mot-dur').value) || 3,
+    motion_fps: parseInt($('#mot-fps').value) || 15,
+    save_dir: $('#save-dir').value || '',
+    filename_prefix: $('#filename-prefix').value.trim(),
+    thumbnail_size: parseInt($('#thumb-size').value) || 128,
+    show_toast: $('#show-toast').checked,
+    toast_duration: parseInt($('#toast-dur').value) || 2500,
+    auto_open_folder: $('#auto-open-folder').checked,
+    sound_enabled: $('#sound-on').checked,
+    start_minimized: $('#start-minimized').checked,
+    hide_on_capture: $('#hide-on-capture').checked,
+    save_thumbnail: $('#save-thumbnail').checked,
+    record_system_audio: $('#record-audio').checked,
+    rec_position: recPosBtn ? recPosBtn.dataset.pos : 'top-left',
+    close_to_tray: $('#close-to-tray').checked,
+    ui_opacity: parseInt($('#ui-opacity').value) || 100,
+    hotkey_image: $('#hotkey-image').dataset.pending || $('#hotkey-image').value || 'CommandOrControl+Shift+S',
+    hotkey_video: $('#hotkey-video').dataset.pending || $('#hotkey-video').value || 'CommandOrControl+Shift+V',
+    hotkey_motion: $('#hotkey-motion').dataset.pending || $('#hotkey-motion').value || 'CommandOrControl+Shift+M',
+  };
+}
+
+function applyConfig(cfg) {
+  if (!cfg) return;
+  activeMode = cfg.mode || 'image';
+  activeFmt = (cfg.image_format && (cfg.image_format.toLowerCase() === 'jpg' || cfg.image_format.toLowerCase() === 'jpeg')) ? 'jpg' : 'png';
+  activeRecPos = cfg.rec_position || cfg.rec_corner || 'top-left';
+
+  modeBlocks.forEach(b => b.classList.remove('active'));
+  const ab = document.querySelector(`.mode-block[data-mode="${activeMode}"]`);
+  if (ab) ab.classList.add('active');
+
+  updateFmtUI();
+
+  recPosBtns.forEach(b => b.classList.remove('active'));
+  const arb = document.querySelector(`#rec-pos-picker button[data-pos="${activeRecPos}"]`);
+  if (arb) arb.classList.add('active');
+
+  // JPG quality
+  const jq = cfg.jpeg_quality || 90;
+  $('#quality').value = jq;
+  $('#qv').textContent = jq;
+
+  $('#vid-dur').value = cfg.video_duration || 3;
+  $('#vid-fps').value = cfg.video_fps || 30;
+  $('#mot-dur').value = cfg.motion_duration || 3;
+  $('#mot-fps').value = cfg.motion_fps || 15;
+  $('#save-dir').value = cfg.save_dir || '';
+  $('#filename-prefix').value = cfg.filename_prefix || '';
+  $('#thumb-size').value = cfg.thumbnail_size || 128;
+  $('#thumb-size-label').textContent = (cfg.thumbnail_size || 128) + 'px';
+  $('#show-toast').checked = cfg.show_toast !== false;
+  $('#toast-dur').value = cfg.toast_duration || 2500;
+  $('#toast-dur-label').textContent = ((cfg.toast_duration || 2500) / 1000).toFixed(1) + 's';
+  $('#auto-open-folder').checked = cfg.auto_open_folder !== false;
+  $('#sound-on').checked = cfg.sound_enabled !== false;
+  $('#start-minimized').checked = !!cfg.start_minimized;
+  $('#hide-on-capture').checked = cfg.hide_on_capture !== false;
+  $('#save-thumbnail').checked = !!cfg.save_thumbnail;
+  $('#record-audio').checked = cfg.record_system_audio !== false;
+  $('#close-to-tray').checked = cfg.close_to_tray !== false;
+  $('#ui-opacity').value = cfg.ui_opacity || 100;
+  $('#ui-opacity-label').textContent = (cfg.ui_opacity || 100) + '%';
+  document.body.style.setProperty('--ui-opacity', ((cfg.ui_opacity || 100) / 100).toString());
+
+  if (cfg.hotkey_image) { $('#hotkey-image').value = cfg.hotkey_image; }
+  if (cfg.hotkey_video) { $('#hotkey-video').value = cfg.hotkey_video; }
+  if (cfg.hotkey_motion) { $('#hotkey-motion').value = cfg.hotkey_motion; }
+}
+
+// ---- Listen for events from Rust ----
+if (event) {
+  event.listen('capture-started', () => {
+    const sbDot = $('#sb-dot');
+    if (sbDot) sbDot.classList.add('rec');
+  });
+  event.listen('capture-completed', () => {
+    const sbDot = $('#sb-dot');
+    const sbText = $('#sb-text');
+    if (sbDot) sbDot.classList.remove('rec');
+    if (sbText) sbText.textContent = 'COMPLETED';
+    setTimeout(() => { if (sbText) sbText.textContent = 'SYSTEM ONLINE'; }, 2000);
+  });
+  event.listen('capture-error', (e) => {
+    const sbDot = $('#sb-dot');
+    const sbText = $('#sb-text');
+    if (sbDot) sbDot.classList.remove('rec');
+    if (sbText) sbText.textContent = 'ERROR';
+    setTimeout(() => { if (sbText) sbText.textContent = 'SYSTEM ONLINE'; }, 3000);
+  });
+  event.listen('save-completed', () => {
+    const sbText = $('#sb-text');
+    if (sbText) sbText.textContent = 'SAVED';
+  });
+}
+
+// ---- Number inputs: digits only ----
+$$('input[type=number]').forEach(inp => {
   inp.addEventListener('keydown', e => {
     const allowed = [8,9,27,13,37,39,36,35,46];
     if (allowed.indexOf(e.keyCode) !== -1) return;
@@ -169,126 +387,9 @@ document.querySelectorAll('input[type=number]').forEach(inp => {
   });
 });
 
-function setStatus(text, color) {
-  const st = document.getElementById('status-text');
-  const sd = document.getElementById('status-dot');
-  if (st) st.textContent = text;
-  if (sd) {
-    sd.classList.remove('rec');
-    if (color === 'rec') sd.classList.add('rec');
-  }
-}
-
-function showRecOverlay(show, elapsedSec) {
-  const overlay = document.getElementById('rec-overlay');
-  const timer = document.getElementById('rec-timer');
-  if (!overlay) return;
-  if (show) {
-    overlay.classList.add('visible');
-    if (timer) timer.textContent = (elapsedSec|0) + 's';
-  } else {
-    overlay.classList.remove('visible');
-  }
-}
-
-listen('recording-started', (e) => {
-  isCapturing = true;
-  setStatus('RECORDING', 'rec');
-  snapBtn.textContent = 'REC';
-  snapBtn.classList.add('recording');
-  showRecOverlay(true, 0);
+// ---- Load config ----
+invoke('load_config').then(cfg => {
+  applyConfig(cfg);
+}).catch(() => {
+  updateFmtUI();
 });
-
-listen('recording-tick', (e) => {
-  const data = e.payload || {};
-  const elapsed = data.elapsed_sec || 0;
-  const timer = document.getElementById('rec-timer');
-  if (timer) timer.textContent = elapsed.toFixed(1) + 's';
-  setStatus('REC ' + elapsed.toFixed(1) + 's', 'rec');
-});
-
-listen('recording-stopped', (e) => {
-  showRecOverlay(false);
-});
-
-listen('capture-complete', (e) => {
-  setStatus('CAPTURED');
-  resetSnapBtn();
-  setTimeout(() => setStatus('READY'), 2000);
-});
-
-listen('capture-error', (e) => {
-  setStatus('ERROR');
-  resetSnapBtn();
-  setTimeout(() => setStatus('READY'), 2000);
-});
-
-function collectConfig() {
-  return {
-    mode: activeMode,
-    image_format: activeFmt,
-    jpeg_quality: parseInt(document.getElementById('quality').value) || 90,
-    video_duration: parseInt(document.getElementById('vid-dur').value) || 10,
-    video_fps: parseInt(document.getElementById('vid-fps').value) || 20,
-    motion_duration: parseInt(document.getElementById('mot-dur').value) || 3,
-    motion_fps: parseInt(document.getElementById('mot-fps').value) || 15,
-    motion_format: activeMotionFmt,
-    save_dir: document.getElementById('save-dir').value || '',
-    hotkey: hotkeyInput.value || 'CommandOrControl+Shift+S',
-    sound_enabled: document.getElementById('sound-on').checked,
-    toast_duration: parseInt(document.getElementById('toast-dur').value) || 2500,
-  };
-}
-
-let saveTimeout = null;
-function saveConfig() {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(async () => {
-    const cfg = collectConfig();
-    try {
-      await invoke('save_config', { config: cfg });
-    } catch(e) { console.error('Save config failed:', e); }
-  }, 300);
-}
-
-async function loadConfig() {
-  try {
-    const cfg = await invoke('get_config');
-    currentCfg = cfg;
-    activeMode = cfg.mode || 'image';
-    activeFmt = (cfg.image_format && cfg.image_format.toLowerCase() === 'jpg') ? 'jpg' : 'png';
-    activeMotionFmt = (cfg.motion_format && cfg.motion_format.toLowerCase() === 'jpg') ? 'jpg' : 'gif';
-
-    modeBlocks.forEach(b => b.classList.remove('active'));
-    const ab = document.querySelector(`.mode-block[data-mode="${activeMode}"]`);
-    if (ab) ab.classList.add('active');
-
-    fmtBtns.forEach(b => b.classList.remove('active'));
-    const afb = document.querySelector(`#fmt-picker button[data-fmt="${activeFmt}"]`);
-    if (afb) afb.classList.add('active');
-    jpgQualityRow.style.opacity = activeFmt === 'jpg' ? '1' : '0.45';
-
-    motionFmtBtns.forEach(b => b.classList.remove('active'));
-    const amfb = document.querySelector(`#motion-fmt-picker button[data-mfmt="${activeMotionFmt}"]`);
-    if (amfb) amfb.classList.add('active');
-    updateTags();
-
-    document.getElementById('quality').value = cfg.jpeg_quality || 90;
-    document.getElementById('qv').textContent = cfg.jpeg_quality || 90;
-    document.getElementById('vid-dur').value = cfg.video_duration || 10;
-    document.getElementById('vid-fps').value = cfg.video_fps || 20;
-    document.getElementById('mot-dur').value = cfg.motion_duration || 3;
-    document.getElementById('mot-fps').value = cfg.motion_fps || 15;
-    document.getElementById('save-dir').value = cfg.save_dir || '';
-    hotkeyInput.value = cfg.hotkey || 'CommandOrControl+Shift+S';
-    document.getElementById('sound-on').checked = cfg.sound_enabled !== false;
-    document.getElementById('toast-dur').value = cfg.toast_duration || 2500;
-    document.getElementById('toast-dur-label').textContent = ((cfg.toast_duration||2500)/1000).toFixed(1)+'s';
-  } catch(e) { console.error('Load config failed:', e); }
-}
-
-async function init() {
-  await loadConfig();
-  setStatus('READY');
-}
-init().catch(console.error);

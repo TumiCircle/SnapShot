@@ -27,18 +27,11 @@ fn load_config(state: tauri::State<AppState>) -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-fn save_config(app: tauri::AppHandle, state: tauri::State<AppState>, mut config: AppConfig) -> Result<(), String> {
-    // Validate save_dir: if empty, use default
-    if config.save_dir.trim().is_empty() {
-        config.save_dir = crate::config::default_save_dir();
-    }
-    // Normalize image_format
-    config.image_format = match config.image_format.to_lowercase().as_str() {
-        "jpg" | "jpeg" => "jpg".to_string(),
-        _ => "png".to_string(),
+fn save_config(app: tauri::AppHandle, state: tauri::State<AppState>, config: serde_json::Value) -> Result<(), String> {
+    let config = {
+        let cfg = state.config.lock().map_err(|e| e.to_string())?;
+        merge_and_validate_config(&cfg, config)?
     };
-    // Clamp jpeg_quality to valid range
-    config.jpeg_quality = config.jpeg_quality.clamp(1, 100);
 
     let (old_hk_img, old_hk_vid, old_hk_mot) = {
         let cfg = state.config.lock().map_err(|e| e.to_string())?;
@@ -62,6 +55,38 @@ fn save_config(app: tauri::AppHandle, state: tauri::State<AppState>, mut config:
     }
 
     Ok(())
+}
+
+/// Merges a (possibly partial) frontend payload over the current config and
+/// normalizes the result. Fields omitted by the frontend keep their current
+/// value instead of being silently reset to defaults.
+fn merge_and_validate_config(
+    current: &AppConfig,
+    incoming: serde_json::Value,
+) -> Result<AppConfig, String> {
+    let mut merged = serde_json::to_value(current.clone()).map_err(|e| e.to_string())?;
+    if let (Some(base), Some(incoming_obj)) = (merged.as_object_mut(), incoming.as_object()) {
+        for (key, value) in incoming_obj {
+            base.insert(key.clone(), value.clone());
+        }
+    }
+
+    let mut config: AppConfig = serde_json::from_value(merged).map_err(|e| e.to_string())?;
+
+    // Validate save_dir: if empty, use default
+    if config.save_dir.trim().is_empty() {
+        config.save_dir = crate::config::default_save_dir();
+    }
+    // Normalize filename prefix (trim; empty is allowed and handled at file build time)
+    config.filename_prefix = config.filename_prefix.trim().to_string();
+    // Normalize image_format
+    config.image_format = match config.image_format.to_lowercase().as_str() {
+        "jpg" | "jpeg" => "jpg".to_string(),
+        _ => "png".to_string(),
+    };
+    // Clamp jpeg_quality to valid range
+    config.jpeg_quality = config.jpeg_quality.clamp(1, 100);
+    Ok(config)
 }
 
 #[tauri::command]
@@ -426,6 +451,15 @@ fn main() {
     let start_min = config.start_minimized;
 
     tauri::Builder::default()
+        // Only one PixelSnap instance may run at a time; a second launch
+        // focuses the existing main window instead of opening a duplicate.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_global_shortcut::Builder::new()
             .with_handler(|app, shortcut, event| {
                 if event.state() != ShortcutState::Pressed {
@@ -616,4 +650,53 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_config() -> AppConfig {
+        let mut cfg = AppConfig::default();
+        cfg.filename_prefix = "mygame".to_string();
+        cfg.hotkey_image = "Shift+S".to_string();
+        cfg.hotkey_video = "Shift+V".to_string();
+        cfg.hotkey_motion = "Shift+M".to_string();
+        cfg
+    }
+
+    #[test]
+    fn partial_payload_preserves_filename_prefix() {
+        let current = base_config();
+        // Payload from an older/partial frontend that does not send filename_prefix.
+        let incoming = serde_json::json!({
+            "mode": "image",
+            "jpeg_quality": 80,
+        });
+        let merged = merge_and_validate_config(&current, incoming).unwrap();
+        assert_eq!(merged.filename_prefix, "mygame");
+        assert_eq!(merged.hotkey_image, "Shift+S");
+        assert_eq!(merged.jpeg_quality, 80);
+    }
+
+    #[test]
+    fn explicit_prefix_update_wins() {
+        let current = base_config();
+        let incoming = serde_json::json!({
+            "filename_prefix": "  another-prefix  ",
+        });
+        let merged = merge_and_validate_config(&current, incoming).unwrap();
+        assert_eq!(merged.filename_prefix, "another-prefix");
+    }
+
+    #[test]
+    fn partial_payload_preserves_missing_optional_fields() {
+        let current = base_config();
+        let incoming = serde_json::json!({ "mode": "video" });
+        let merged = merge_and_validate_config(&current, incoming).unwrap();
+        assert_eq!(merged.capture_target, "auto");
+        assert_eq!(merged.video_format, "mp4");
+        assert_eq!(merged.motion_format, "gif");
+        assert_eq!(merged.audio_bitrate, 192_000);
+    }
 }

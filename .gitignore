@@ -32,3 +32,6 @@ src-tauri/WixTools/
 
 # Local config (contains user-specific paths, should not be committed)
 # Note: AppConfig is stored in %APPDATA% at runtime, not in repo
+
+# Local user test recordings
+usertest/

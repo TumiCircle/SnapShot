@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use chrono::Local;
-use image::{DynamicImage, RgbaImage, ImageFormat as ImgFmt, codecs::gif::Repeat};
+use image::{DynamicImage, RgbaImage, ImageFormat as ImgFmt};
 use std::fs;
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -12,8 +12,10 @@ use std::sync::{
 use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::{HWND, POINT, RECT};
+use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+use windows::Win32::System::Performance::QueryPerformanceCounter;
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetForegroundWindow, GetWindow, GetWindowRect, GetWindowTextW,
     GW_OWNER, IsWindowVisible, FindWindowW,
@@ -130,6 +132,20 @@ fn is_result_set(result: &CaptureResult) -> bool {
     result.lock().unwrap().is_some()
 }
 
+fn wait_for_result_with_timeout(
+    result: &CaptureResult,
+    timeout: Duration,
+) -> Result<(), String> {
+    let start = Instant::now();
+    while !is_result_set(result) {
+        if start.elapsed() > timeout {
+            return Err("Video encoding timed out".to_string());
+        }
+        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+    }
+    Ok(())
+}
+
 fn set_error(result: &CaptureResult, msg: String) {
     let mut res = result.lock().unwrap();
     if res.is_none() {
@@ -209,7 +225,7 @@ unsafe fn is_real_top_level_window(hwnd: HWND) -> bool {
     true
 }
 
-unsafe fn get_dwm_client_area_bounds(hwnd: HWND) -> Option<(i32, i32, i32, i32)> {
+unsafe fn get_dwm_frame_bounds(hwnd: HWND) -> Option<(i32, i32, i32, i32)> {
     let mut rect = RECT::default();
     let hr = unsafe {
         DwmGetWindowAttribute(
@@ -224,6 +240,50 @@ unsafe fn get_dwm_client_area_bounds(hwnd: HWND) -> Option<(i32, i32, i32, i32)>
     } else {
         None
     }
+}
+
+/// Computes the client-area crop rectangle `(x, y, w, h)` inside the WGC frame.
+///
+/// Windows Graphics Capture aligns the window frame with the DWM extended
+/// frame bounds (the visible frame including the title bar), while the client
+/// area starts below the title bar. Mapping the client origin to screen
+/// coordinates and subtracting the DWM frame origin gives the exact crop that
+/// excludes the Windows title bar (the "white bar" on top of the window).
+unsafe fn get_client_area_crop(hwnd: HWND) -> Option<(u32, u32, u32, u32)> {
+    let (dwm_left, dwm_top, dwm_w, dwm_h) = unsafe { get_dwm_frame_bounds(hwnd) }?;
+    if dwm_w <= 0 || dwm_h <= 0 {
+        return None;
+    }
+
+    let mut client = RECT::default();
+    if unsafe { GetClientRect(hwnd, &mut client) }.is_err() {
+        return None;
+    }
+    let cw = client.right - client.left;
+    let ch = client.bottom - client.top;
+    if cw <= 0 || ch <= 0 {
+        return None;
+    }
+
+    let mut origin = POINT { x: 0, y: 0 };
+    if !unsafe { ClientToScreen(hwnd, &mut origin) }.as_bool() {
+        return None;
+    }
+
+    let crop_x = (origin.x - dwm_left).max(0) as u32;
+    let crop_y = (origin.y - dwm_top).max(0) as u32;
+    let max_w = (dwm_w as u32).saturating_sub(crop_x);
+    let max_h = (dwm_h as u32).saturating_sub(crop_y);
+    if max_w == 0 || max_h == 0 {
+        return None;
+    }
+
+    Some((
+        crop_x,
+        crop_y,
+        (cw as u32).min(max_w),
+        (ch as u32).min(max_h),
+    ))
 }
 
 unsafe fn get_foreground_window_info() -> Option<WindowInfo> {
@@ -314,6 +374,19 @@ fn sanitize_filename(name: &str) -> String {
 fn build_filename(prefix: &str, kind: &str, timestamp: &str, unique: &str, ext: &str) -> String {
     let pfx = if prefix.is_empty() { String::new() } else { format!("{}_", prefix) };
     format!("{}{}_{}_{}.{}", pfx, kind, timestamp, unique, ext)
+}
+
+/// Exact presentation timestamp (100ns units) for video frame `index` at `fps`.
+///
+/// Computed as `round(index * TICKS_PER_SECOND / fps)` instead of accumulating
+/// `TICKS_PER_SECOND / fps`, which truncates and drifts. With this formula the
+/// final frame plus one frame interval lands exactly on the requested duration.
+fn frame_timestamp(index: i64, fps: i64) -> i64 {
+    if index <= 0 || fps <= 0 {
+        0
+    } else {
+        (index * TICKS_PER_SECOND + fps / 2) / fps
+    }
 }
 
 fn effective_thumb_size(cfg: &AppConfig) -> u32 {
@@ -480,7 +553,7 @@ struct VideoShared {
 fn spawn_video_encoding_thread(
     mut encoder: VideoEncoder,
     shared: Arc<VideoShared>,
-    _audio_format: Option<crate::audio::AudioFormat>,
+    audio_format: Option<crate::audio::AudioFormat>,
     record_audio: bool,
     _audio_bitrate: u32,
     fps: u32,
@@ -489,23 +562,14 @@ fn spawn_video_encoding_thread(
     save_thumbnail: bool,
     file_path: PathBuf,
 ) -> std::thread::JoinHandle<()> {
-    let frame_interval_ticks = TICKS_PER_SECOND / fps.max(1) as i64;
+    let fps = fps.max(1) as i64;
     let duration_ticks = duration_secs as i64 * TICKS_PER_SECOND;
+    let total_frames = (duration_secs as i64 * fps).max(1);
 
     std::thread::spawn(move || {
-        // Wait for first frame
-        while !shared.first_frame_ready.load(Ordering::SeqCst) {
-            if shared.stop_requested.load(Ordering::SeqCst) {
-                let _ = encoder.finish();
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(1));
-        }
-
-        let start_instant = Instant::now();
-        eprintln!("[VIDEO] Encoding thread started at wall-clock, fps={}, dur={}s", fps, duration_secs);
-
-        // Start audio capture
+        // Start audio capture first so its stream is already live by the time
+        // the video timeline starts. This removes the startup delay that used
+        // to shift the audio track earlier than the picture.
         let (audio_capture, audio_rx) = if record_audio {
             match crate::audio::AudioCapture::start() {
                 Ok((cap, rx)) => {
@@ -521,8 +585,40 @@ fn spawn_video_encoding_thread(
             (None, None)
         };
 
+        // Wait for first frame
+        while !shared.first_frame_ready.load(Ordering::SeqCst) {
+            if shared.stop_requested.load(Ordering::SeqCst) {
+                let _ = encoder.finish();
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        let start_instant = Instant::now();
+        eprintln!("[VIDEO] Encoding thread started at wall-clock, fps={}, dur={}s", fps, duration_secs);
+
+        // QPC snapshot at the moment the video timeline starts. Audio packets
+        // carrying an older QPC were captured before the first frame and are
+        // discarded below (WASAPI may deliver up to a buffer-duration of
+        // pre-roll audio after Start()).
+        let mut start_qpc = 0i64;
+        if unsafe { QueryPerformanceCounter(&mut start_qpc) }.is_err() {
+            start_qpc = 0; // cannot trim; keep all audio
+        }
+
+        let (sample_rate, audio_block_align, max_audio_frames) = match audio_format {
+            Some(fmt) if fmt.sample_rate > 0 => {
+                let block_align = fmt.channels as usize * 2; // PCM16
+                let max_frames =
+                    (duration_ticks * fmt.sample_rate as i64) / TICKS_PER_SECOND;
+                (fmt.sample_rate as i64, block_align, max_frames)
+            }
+            _ => (0i64, 0usize, 0i64),
+        };
+
         let mut audio_buf: Vec<u8> = Vec::with_capacity(AUDIO_BUF_CAPACITY);
-        let mut last_sent_ticks: i64 = 0;
+        let mut audio_frames_pushed: u64 = 0;
+        let mut sent_frames: i64 = 0;
 
         // Encoding loop: drive frames at exact wall-clock intervals
         loop {
@@ -535,49 +631,113 @@ fn spawn_video_encoding_thread(
                 break;
             }
 
-            // Send all frames due up to current wall-clock time
-            let target_ticks = elapsed_ticks.min(duration_ticks.saturating_sub(1));
-            while last_sent_ticks + frame_interval_ticks <= target_ticks {
-                last_sent_ticks += frame_interval_ticks;
-
-                // Drain audio
-                if let Some(ref rx) = audio_rx {
-                    while let Ok(chunk) = rx.try_recv() {
-                        audio_buf.extend_from_slice(&chunk);
-                    }
-                }
-
+            // Send every frame whose presentation time has been reached.
+            let frames_due = (elapsed_ticks * fps / TICKS_PER_SECOND).min(total_frames);
+            while sent_frames <= frames_due {
+                let pts = frame_timestamp(sent_frames, fps);
                 // Send video frame
                 {
                     let frame_guard = shared.latest_frame.lock().unwrap();
                     if let Some(ref frame_data) = *frame_guard {
-                        let _ = encoder.send_frame_buffer(frame_data, last_sent_ticks);
+                        let _ = encoder.send_frame_buffer(frame_data, pts);
+                    }
+                }
+                sent_frames += 1;
+            }
+
+            // Discard packets captured before the video timeline (QPC < start)
+            // and push everything else in order. The audio capture thread
+            // already supplies continuous silence during idle periods, so no
+            // wall-clock trimming is applied here: trimming real audio to the
+            // encoder thread's clock caused periodic cutouts that sounded like
+            // electrical buzzing.
+            if sample_rate > 0 {
+                audio_buf.clear();
+                if let Some(ref rx) = audio_rx {
+                    while let Ok((chunk, qpc)) = rx.try_recv() {
+                        if qpc >= start_qpc {
+                            audio_buf.extend_from_slice(&chunk);
+                        }
                     }
                 }
 
-                // Flush audio (encoder uses monotonic audio clock; timestamp is ignored)
                 if !audio_buf.is_empty() {
-                    let _ = encoder.send_audio_buffer(&audio_buf, last_sent_ticks);
-                    audio_buf.clear();
+                    let pushed_frames = audio_frames_pushed as i64;
+                    let allowed = max_audio_frames.saturating_sub(pushed_frames).max(0) as usize;
+                    let buf_frames = audio_buf.len() / audio_block_align;
+                    if buf_frames > allowed {
+                        audio_buf.truncate(allowed * audio_block_align);
+                    }
                 }
+
+                if !audio_buf.is_empty() {
+                    audio_frames_pushed =
+                        audio_frames_pushed.saturating_add((audio_buf.len() / audio_block_align) as u64);
+                    let _ = encoder.send_audio_buffer(&audio_buf, elapsed_ticks);
+                }
+                audio_buf.clear();
             }
 
             // Sleep a bit to avoid busy-waiting, but wake up frequently enough to hit frame deadlines
-            let next_frame_due_ticks = last_sent_ticks + frame_interval_ticks;
+            let next_frame_due_ticks = frame_timestamp(sent_frames, fps);
             let until_next = (next_frame_due_ticks - elapsed_ticks).max(0);
             let sleep_ms = (until_next as u64 / 10_000).saturating_sub(1).min(5); // wake 1ms early, max 5ms sleep
             std::thread::sleep(Duration::from_millis(if sleep_ms > 0 { sleep_ms } else { 1 }));
         }
 
-        // Final drain of any remaining audio
-        if let Some(ref rx) = audio_rx {
-            while let Ok(chunk) = rx.try_recv() {
-                audio_buf.extend_from_slice(&chunk);
+        // Catch up any frames that were due but not yet sent (e.g. scheduler
+        // hiccups), so the file always contains exactly duration*fps frames
+        // with a final frame ending precisely at the requested duration.
+        while sent_frames < total_frames {
+            let pts = frame_timestamp(sent_frames, fps);
+            {
+                let frame_guard = shared.latest_frame.lock().unwrap();
+                if let Some(ref frame_data) = *frame_guard {
+                    let _ = encoder.send_frame_buffer(frame_data, pts);
+                }
             }
+            sent_frames += 1;
         }
-        if !audio_buf.is_empty() {
-            let _ = encoder.send_audio_buffer(&audio_buf, duration_ticks);
+
+        // Final drain of any remaining audio, capped so the audio track cannot
+        // exceed the video duration.
+        if sample_rate > 0 {
             audio_buf.clear();
+            if let Some(ref rx) = audio_rx {
+                while let Ok((chunk, qpc)) = rx.try_recv() {
+                    if qpc >= start_qpc {
+                        audio_buf.extend_from_slice(&chunk);
+                    }
+                }
+            }
+
+            let pushed_frames = audio_frames_pushed as i64;
+            let allowed_final = max_audio_frames.saturating_sub(pushed_frames).max(0) as usize;
+            let buf_frames = audio_buf.len() / audio_block_align;
+            if buf_frames > allowed_final {
+                audio_buf.truncate(allowed_final * audio_block_align);
+            }
+            if !audio_buf.is_empty() {
+                audio_frames_pushed =
+                    audio_frames_pushed.saturating_add((audio_buf.len() / audio_block_align) as u64);
+                let _ = encoder.send_audio_buffer(&audio_buf, duration_ticks);
+            }
+            audio_buf.clear();
+
+            // Pad the audio track with silence so it ends exactly with the
+            // video instead of cutting off early.
+            let audio_ticks = (audio_frames_pushed as i64 * TICKS_PER_SECOND) / sample_rate;
+            let missing_ticks = duration_ticks.saturating_sub(audio_ticks);
+            if missing_ticks > 0 {
+                let missing_frames = ((missing_ticks * sample_rate)
+                    + TICKS_PER_SECOND
+                    - 1)
+                    / TICKS_PER_SECOND;
+                if missing_frames > 0 {
+                    let silence = vec![0u8; missing_frames as usize * audio_block_align];
+                    let _ = encoder.send_audio_buffer(&silence, duration_ticks);
+                }
+            }
         }
 
         // Stop audio capture (drop guard, which stops the capture thread)
@@ -585,9 +745,10 @@ fn spawn_video_encoding_thread(
 
         // Finish encoding (blocks until file is finalized)
         eprintln!("[VIDEO] Finalizing encoder, sent {} frames (target ~{} frames)",
-            last_sent_ticks / frame_interval_ticks, duration_ticks / frame_interval_ticks);
+            sent_frames, total_frames);
+        let finish_start = Instant::now();
         let _ = encoder.finish();
-        eprintln!("[VIDEO] Encoder finished");
+        eprintln!("[VIDEO] Encoder finished in {:.1}s", finish_start.elapsed().as_secs_f64());
 
         // Write thumbnail and set result
         let thumb_data = shared.thumbnail.lock().unwrap().clone();
@@ -826,6 +987,8 @@ fn run_video_capture(params: CaptureParams) -> Result<CaptureResultInternal, Str
     // Ensure stop is signaled and capture is stopped
     stop_requested.store(true, Ordering::SeqCst);
     ctrl.stop().ok();
+    let finish_timeout = Duration::from_secs(params.duration_secs.max(3) * 2 + 10);
+    wait_for_result_with_timeout(&result, finish_timeout)?;
     let _ = encode_thread.join();
     std::thread::sleep(Duration::from_millis(100));
 
@@ -1330,6 +1493,8 @@ fn run_monitor_video_capture(params: MonitorCaptureParams) -> Result<CaptureResu
 
     stop_requested.store(true, Ordering::SeqCst);
     ctrl.stop().ok();
+    let finish_timeout = Duration::from_secs(params.duration_secs.max(3) * 2 + 10);
+    wait_for_result_with_timeout(&result, finish_timeout)?;
     let _ = encode_thread.join();
     std::thread::sleep(Duration::from_millis(100));
 
@@ -1674,7 +1839,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                         "jpg" | "jpeg" => "jpg",
                         _ => "png",
                     };
-                    let (fp, tp) = build_paths("snap", ext);
+                    let (fp, tp) = build_paths("image", ext);
                     run_monitor_image_capture(MonitorCaptureParams {
                         monitor,
                         thumb_path: tp,
@@ -1744,16 +1909,18 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
             let (mut crop_x, mut crop_y, mut crop_w, mut crop_h) = (0u32, 0u32, win_info.width as u32, win_info.height as u32);
             if !matches!(target, CaptureTarget::MainWindow) {
                 unsafe {
-                    if let Some((_, _, dwm_w, dwm_h)) = get_dwm_client_area_bounds(win_info.hwnd) {
-                        if let Ok(win_rect) = win_info.window.rect() {
-                            let win_w = (win_rect.right - win_rect.left) as u32;
-                            let win_h = (win_rect.bottom - win_rect.top) as u32;
-                            let cx = win_w.saturating_sub(dwm_w as u32) / 2;
-                            crop_x = cx;
-                            crop_y = win_h.saturating_sub(dwm_h as u32) - cx;
-                            crop_w = dwm_w as u32;
-                            crop_h = dwm_h as u32;
-                        }
+                    if let Some((x, y, w, h)) = get_client_area_crop(win_info.hwnd) {
+                        crop_x = x;
+                        crop_y = y;
+                        crop_w = w;
+                        crop_h = h;
+                    } else if let Some((_, _, dwm_w, dwm_h)) = get_dwm_frame_bounds(win_info.hwnd) {
+                        // Fallback: crop to the visible frame (still removes the
+                        // invisible resize borders, even if the title bar remains).
+                        crop_x = 0;
+                        crop_y = 0;
+                        crop_w = dwm_w as u32;
+                        crop_h = dwm_h as u32;
                     }
                 }
             }
@@ -1781,7 +1948,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                         "jpg" | "jpeg" => "jpg",
                         _ => "png",
                     };
-                    run_image_capture(build_params(0, 0, false, build_paths("snap", ext)))
+                    run_image_capture(build_params(0, 0, false, build_paths("image", ext)))
                 }
                 "motion" => {
                     on_event(CaptureEvent::Started(true));
@@ -1811,7 +1978,7 @@ pub fn start_capture<F: Fn(CaptureEvent) + Send + 'static>(
                             _ => "png",
                         };
                         eprintln!("[CAPTURE] Image captured, cfg.image_format='{}', ext='{}'", cfg.image_format, ext);
-                        let fp = base_dir.join(build_filename(&cfg.filename_prefix, "snap", &timestamp, &unique, ext));
+                        let fp = base_dir.join(build_filename(&cfg.filename_prefix, "image", &timestamp, &unique, ext));
                         ("IMAGE", SaveData::Image {
                             img, format: cfg.image_format.clone(), quality: cfg.jpeg_quality,
                         }, fp, thumbnail)
@@ -1903,25 +2070,142 @@ fn save_image(img: &RgbaImage, path: &PathBuf, format: &str, quality: u8) -> Res
 }
 
 fn save_gif_fast(frames: &[RgbaImage], path: &PathBuf, fps: u32) -> Result<(), String> {
-    use image::Delay;
-    use image::codecs::gif::GifEncoder;
-
     if frames.is_empty() {
         return Err("No frames to encode".to_string());
     }
 
+    let (width, height) = frames[0].dimensions();
+    if width == 0 || height == 0 || width > u16::MAX as u32 || height > u16::MAX as u32 {
+        return Err("Invalid GIF dimensions".to_string());
+    }
+
+    // Build one global 256-color palette from a downscaled sample of every
+    // frame. This avoids the extremely slow per-frame NeuQuant pass of the
+    // image crate (default speed=1) and keeps colors consistent across frames.
+    const PALETTE_COLORS: usize = 255; // last slot reserved for transparency
+    let sample = build_gif_palette_sample(frames, 160);
+    let nq = color_quant::NeuQuant::new(10, PALETTE_COLORS, &sample);
+    let mut palette_rgb = nq.color_map_rgb();
+    palette_rgb.extend_from_slice(&[0u8, 0, 0]); // index 255 = transparent
+
+    // 32^3 lookup table: quantized RGB -> nearest palette index. Per-pixel
+    // mapping is then a single table lookup instead of a color search.
+    let mut lut = vec![0u8; 32 * 32 * 32];
+    for r in 0..32u16 {
+        for g in 0..32u16 {
+            for b in 0..32u16 {
+                let cr = (r << 3) as i32 | (r >> 2) as i32; // expand 5-bit to 8-bit
+                let cg = (g << 3) as i32 | (g >> 2) as i32;
+                let cb = (b << 3) as i32 | (b >> 2) as i32;
+                let mut best = 0usize;
+                let mut best_dist = i32::MAX;
+                for (i, entry) in palette_rgb[..PALETTE_COLORS * 3].chunks_exact(3).enumerate() {
+                    let dr = cr - entry[0] as i32;
+                    let dg = cg - entry[1] as i32;
+                    let db = cb - entry[2] as i32;
+                    let dist = dr * dr + dg * dg + db * db;
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best = i;
+                    }
+                }
+                lut[((r as usize) << 10) | ((g as usize) << 5) | b as usize] = best as u8;
+            }
+        }
+    }
+
     let file = fs::File::create(path).map_err(|e| e.to_string())?;
-    let mut encoder = GifEncoder::new(file);
-    encoder.set_repeat(Repeat::Infinite).map_err(|e| e.to_string())?;
-    let frame_delay_ms = (1000 / fps.max(1)) as u32;
+    let writer = std::io::BufWriter::new(file);
+    let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[])
+        .map_err(|e| format!("GIF encoder init error: {}", e))?;
+    encoder
+        .set_repeat(gif::Repeat::Infinite)
+        .map_err(|e| e.to_string())?;
+    let frame_delay_cs = (1000 / fps.max(1) / 10).max(1) as u16;
 
     for frame in frames {
-        let gif_frame = image::Frame::from_parts(
-            frame.clone().into(),
-            0, 0,
-            Delay::from_numer_denom_ms(frame_delay_ms, 1),
-        );
-        encoder.encode_frame(gif_frame).map_err(|e| e.to_string())?;
+        if frame.dimensions() != (width, height) {
+            return Err("GIF frames have inconsistent dimensions".to_string());
+        }
+
+        let mut indices = Vec::with_capacity((width * height) as usize);
+        let mut transparent: Option<u8> = None;
+        for p in frame.pixels() {
+            if p[3] == 0 {
+                transparent.get_or_insert(PALETTE_COLORS as u8);
+                indices.push(PALETTE_COLORS as u8);
+            } else {
+                let key = (((p[0] >> 3) as usize) << 10)
+                    | (((p[1] >> 3) as usize) << 5)
+                    | ((p[2] >> 3) as usize);
+                indices.push(lut[key]);
+            }
+        }
+
+        let mut gif_frame =
+            gif::Frame::from_palette_pixels(width as u16, height as u16, indices, palette_rgb.clone(), transparent);
+        gif_frame.delay = frame_delay_cs;
+        gif_frame.dispose = gif::DisposalMethod::Background;
+        encoder.write_frame(&gif_frame).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Downscales all frames into one RGBA sample buffer used to train the global
+/// GIF palette. Small sample keeps palette training fast while still being
+/// representative of the whole animation.
+fn build_gif_palette_sample(frames: &[RgbaImage], max_dim: u32) -> Vec<u8> {
+    let mut sample = Vec::with_capacity(frames.len() * max_dim as usize * max_dim as usize * 4);
+    for frame in frames {
+        let (w, h) = frame.dimensions();
+        let scale = (max_dim as f32) / (w.max(h) as f32);
+        let tw = ((w as f32 * scale) as u32).max(1);
+        let th = ((h as f32 * scale) as u32).max(1);
+        let thumb = image::imageops::resize(
+            frame,
+            tw,
+            th,
+            image::imageops::FilterType::Triangle,
+        );
+        sample.extend_from_slice(thumb.as_raw());
+    }
+    sample
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_timestamps_end_exactly_on_duration() {
+        for (fps, secs) in [(30u64, 3u64), (60, 3), (15, 3), (30, 10), (24, 3)] {
+            let total_frames = (secs * fps) as i64;
+            let last_pts = frame_timestamp(total_frames - 1, fps as i64);
+            let interval_ticks = TICKS_PER_SECOND / fps as i64;
+            let end_ticks = last_pts + interval_ticks;
+            let duration_ticks = secs as i64 * TICKS_PER_SECOND;
+            // The stream end may differ from the exact duration by at most one
+            // 100ns tick after integer rounding.
+            assert!(
+                (end_ticks - duration_ticks).abs() <= 1,
+                "fps={} secs={}: last_pts={} end={} expected={}",
+                fps,
+                secs,
+                last_pts,
+                end_ticks,
+                duration_ticks
+            );
+        }
+    }
+
+    #[test]
+    fn frame_timestamps_are_monotonic_and_interval_spaced() {
+        let fps = 30i64;
+        let mut prev = 0i64;
+        for i in 0..90 {
+            let ts = frame_timestamp(i, fps);
+            assert!(ts >= prev);
+            prev = ts;
+        }
+    }
 }
