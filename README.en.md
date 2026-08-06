@@ -177,6 +177,8 @@ This application uses Windows-specific APIs (Windows Graphics Capture, Media Fou
 
 ## 💖 Thanks
 
+- [Codex](https://openai.com/codex/) - desktop AI pair programming assistant
+- [DeepSeek-V4-Flash-0731](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731) - model capability support
 - [Trae](https://www.trae.ai/) - developed with Trae AI SOLO assistance
 - [Tauri](https://tauri.app/) - excellent desktop application framework
 - [windows-rs](https://github.com/microsoft/windows-rs) - official Microsoft Windows bindings

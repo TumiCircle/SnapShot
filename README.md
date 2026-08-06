@@ -178,6 +178,8 @@ PixelSnap/
 
 ## 🙏 致谢
 
+- [Codex](https://openai.com/codex/) — 桌面端 AI 结对编程助手
+- [DeepSeek-V4-Flash-0731](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731) — 提供模型能力支持
 - [Trae](https://www.trae.ai/) — 本项目使用 Trae AI SOLO 辅助开发完成，AI 结对编程极大提升了开发效率
 - [Tauri](https://tauri.app/) — 优秀的桌面应用框架
 - [windows-rs](https://github.com/microsoft/windows-rs) — 微软官方Rust Windows绑定
