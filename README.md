@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/Tauri-2.0-24c8db?style=flat-square&logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/Rust-1.85+-dea584?style=flat-square&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT">
+  <img src="https://img.shields.io/badge/Version-1.2.0-8c82ff?style=flat-square" alt="Version">
 </p>
 
 <p align="center">中文 | <a href="README.en.md">English</a></p>
@@ -36,13 +37,15 @@
 - 🎞️ **动图（GIF）** — 可配置时长和帧率的 GIF 动图捕获
 - ⌨️ **全局快捷键** — 三种模式独立快捷键，可自定义
 - 🎨 **CRT复古界面** — 像素美术风格，动态星空背景，扫描线效果
+- 🌠 **流星辉光** — 流星会划过主界面并照亮前台 UI，背景与界面联动
 - 📁 **自定义保存路径** — 通过浏览对话框选择输出文件夹
 - 🪟 **系统托盘** — 最小化到托盘，托盘菜单快速捕获
 - 🔴 **录制状态 Toast** — REC 与完成提示整合在同一个弹窗中，不再使用独立 REC 小窗
 - 🖼️ **缩略图** — 可选生成缩略图，尺寸可调
 - 🔔 **Toast通知** — 非侵入式完成通知弹窗
-- 🎵 **音效** — 可选捕获完成提示音
+- 🎵 **音效** — 可选捕获触发提示音
 - 🔧 **高度可配置** — 格式、质量、时长、帧率、透明度等丰富设置  
+- 📂 **分类配置** — config.json 按 mode / output / hotkeys / recording / appearance / behavior 分类保存
   <br>
 > *不仅支持三种格式，还有如此别具一格的界面？！爱了爱了*
 
@@ -110,7 +113,7 @@ cargo build --release
 - 图片格式与质量
 - 视频时长与帧率
 - GIF时长与帧率
-- UI透明度（50%-100%）
+- 窗口/UI 透明度（0%-100%，100% 为不透明）
 - 启动行为（最小化到托盘）
 - 捕获后自动打开文件夹
 - Toast通知开关
@@ -142,6 +145,7 @@ PixelSnap/
 │   │   ├── capture.rs         # 核心捕获逻辑（图片/视频/GIF）
 │   │   ├── config.rs          # 配置管理
 │   │   ├── audio.rs           # 音频捕获（WASAPI）
+│   │   ├── log.rs             # 日志（%APPDATA%\PixelSnap\logs）
 │   │   └── toast.rs           # Toast窗口辅助
 │   ├── icons/                 # 应用图标（由build.rs构建时自动生成）
 │   ├── capabilities/          # Tauri权限配置

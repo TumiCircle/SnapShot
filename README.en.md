@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/Tauri-2.0-24c8db?style=flat-square&logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/Rust-1.85+-dea584?style=flat-square&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT">
+  <img src="https://img.shields.io/badge/Version-1.2.0-8c82ff?style=flat-square" alt="Version">
 </p>
 
 <p align="center"><a href="README.md">中文</a> | English</p>
@@ -37,13 +38,15 @@
 - 🎞️ **GIF capture** - configurable duration and frame rate, streamed while recording
 - ⌨️ **Global hotkeys** - three independent, customizable hotkeys
 - 🎨 **CRT retro UI** - pixel art style, animated starfield background, scanline effect
+- 🌠 **Meteor glow** - meteors sweep across the main UI and illuminate the foreground, linking background and interface
 - 📁 **Custom save path** - pick the output folder via a browse dialog
 - 🪟 **System tray** - minimize to tray, quick capture from the tray menu
 - 🔴 **Recording toast** - REC and completion states share the same toast; no separate REC window
 - 🖼️ **Thumbnails** - optional, with adjustable size
 - 🔔 **Toast notifications** - non-intrusive completion popups
-- 🎵 **Sound effects** - optional capture completion sound
+- 🎵 **Sound effects** - optional capture trigger sound
 - 🔧 **Highly configurable** - format, quality, duration, frame rate, bitrate, transparency, starfield and language settings
+- 📂 **Categorized config** - config.json is grouped by mode / output / hotkeys / recording / appearance / behavior
 
 ## 🖥️ UI Preview
 
@@ -108,7 +111,7 @@ All settings can be adjusted in the UI. The configuration file is stored at:
 - Image format and quality
 - Video duration, frame rate and bitrate
 - GIF duration and frame rate
-- Window / UI transparency, starfield density, twinkle speed, meteor rate
+- Window / UI transparency (0-100%, 100% = opaque), starfield density, twinkle speed, meteor rate
 - Startup behavior (minimize to tray)
 - Auto-open folder after capture
 - Toast notification toggle

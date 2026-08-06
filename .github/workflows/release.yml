@@ -30,13 +30,18 @@ jobs:
           ## PixelSnap $tag
 
           ### 修复与改进
-          - GIF 流式编码：边采边写，长录制内存占用保持恒定
-          - 视频码率可调（1-20 Mbps，默认 8 Mbps）
-          - 错误信息直接显示在 Toast 中，录制中可提前停止并正常封口
-          - 日志写入 %APPDATA%\PixelSnap\logs\pixelsnap.log
-          - 修复音轨电流噪声、视频时长与录制超时、GIF 保存速度
-          - 文件名前缀可留空，命名统一 image/video/motion
-          - 截图排除 Windows 标题栏，配置合并式保存，应用单实例
+          - Toast 即时反馈：截图立即显示 COMPLETED，视频/GIF 录制显示 REC，完成后原地切换
+          - 录制弹窗稳定显示，提示音与弹窗同步触发
+          - 配置按分类保存（mode / output / hotkeys / recording / appearance / behavior），前端读取不再重置设置
+          - 透明度语义反转：100% 不透明，0% 全透明，默认 100%
+          - 流星覆盖主界面、辉光增强并与前台 UI 联动；星星光晕与闪烁速度优化
+          - 外观滑杆回退为连续滑杆（0-100%），移除废弃配置与独立 REC 小窗
+
+          ### Highlights
+          - Instant toast feedback with in-place REC -> completed switching
+          - Categorized config file; settings no longer reset on startup
+          - Transparency reversed: 100% = opaque, 0% = fully transparent
+          - Meteors sweep across the UI with glow and foreground lighting
 
           ### 下载
           - PixelSnap_$tag.exe
