@@ -234,6 +234,8 @@ function clearMeteorFx() {
     light.style.opacity = '0';
     light.style.background = 'transparent';
   }
+  const uiLayer = $('#ui-layer');
+  if (uiLayer) uiLayer.style.boxShadow = '';
 }
 
 function startMeteors() {
@@ -270,7 +272,7 @@ function startMeteors() {
     head.style.height = headSize + 'px';
     head.style.background = '#fff';
     head.style.boxShadow =
-      '0 0 20px 8px rgba(' + main + ',1), 0 0 52px 22px rgba(' + glow + ',0.85)';
+      '0 0 28px 12px rgba(' + main + ',1), 0 0 72px 30px rgba(' + glow + ',0.9)';
     m.appendChild(head);
 
     // Pick a start edge and direction so meteors sweep across the whole UI,
@@ -310,7 +312,7 @@ function startMeteors() {
       s.style.left = offX.toFixed(2) + 'px';
       s.style.top = offY.toFixed(2) + 'px';
       s.style.background = 'rgb(' + main + ')';
-      s.style.boxShadow = '0 0 8px 3px rgba(' + main + ',0.75)';
+      s.style.boxShadow = '0 0 10px 4px rgba(' + main + ',0.8)';
       s.style.opacity = Math.max(0.05, 0.8 - i * 0.11).toFixed(2);
       m.appendChild(s);
     }
@@ -330,7 +332,7 @@ function startMeteors() {
       const r = Math.random();
       p.style.background = r < 0.25 ? '#fff' : 'rgb(' + main + ')';
       if (r > 0.8) p.style.background = '#ffee78';
-      p.style.boxShadow = '0 0 10px 4px rgba(' + main + ',0.9)';
+      p.style.boxShadow = '0 0 12px 5px rgba(' + main + ',0.95)';
       const angle = burst
         ? Math.random() * Math.PI * 2
         : Math.atan2(distY, distX) + Math.PI + (Math.random() * 0.8 - 0.4);
@@ -366,10 +368,16 @@ function startMeteors() {
       const y = startY + distY * t;
       m.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)';
       if (light) {
-        const intensity = Math.sin(Math.PI * t) * 0.65;
+        const intensity = Math.sin(Math.PI * t) * 0.75;
         light.style.opacity = intensity.toFixed(3);
         light.style.background =
-          'radial-gradient(circle 260px at ' + x.toFixed(0) + 'px ' + y.toFixed(0) + 'px, rgba(' + glow + ',0.75), rgba(' + main + ',0.28) 45%, transparent 72%)';
+          'radial-gradient(circle 340px at ' + x.toFixed(0) + 'px ' + y.toFixed(0) + 'px, rgba(' + glow + ',0.85), rgba(' + main + ',0.32) 45%, transparent 76%)';
+      }
+      const uiLayer = $('#ui-layer');
+      if (uiLayer) {
+        const uiGlow = Math.sin(Math.PI * t) * 0.4;
+        uiLayer.style.boxShadow =
+          'inset 0 0 180px -30px rgba(' + main + ',' + uiGlow.toFixed(3) + ')';
       }
       // Quick fade in, slow fade out near the end.
       m.style.opacity = t < 0.05 ? String(t / 0.05) : t > 0.85 ? String(Math.max(0, (1 - t) / 0.15)) : '1';
@@ -383,6 +391,10 @@ function startMeteors() {
         if (activeMeteors === 0 && light) {
           light.style.opacity = '0';
           light.style.background = 'transparent';
+        }
+        if (activeMeteors === 0) {
+          const uiLayer = $('#ui-layer');
+          if (uiLayer) uiLayer.style.boxShadow = '';
         }
         m.remove();
       }
