@@ -134,8 +134,8 @@ fn show_toast(
         .lock()
         .map(|c| {
             (
-                1.0 - c.window_transparency as f64 / 100.0,
-                1.0 - c.ui_transparency as f64 / 100.0,
+                c.window_transparency as f64 / 100.0,
+                c.ui_transparency as f64 / 100.0,
             )
         })
         .unwrap_or((1.0, 1.0));

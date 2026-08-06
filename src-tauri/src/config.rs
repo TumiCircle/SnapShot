@@ -59,8 +59,8 @@ fn default_thumb_size() -> u32 { 128 }
 fn default_filename_prefix() -> String { "snap".to_string() }
 fn default_close_behavior() -> bool { true }
 fn default_audio_bitrate() -> u32 { 192_000 }
-fn default_window_transparency() -> u32 { 0 }
-fn default_ui_transparency() -> u32 { 0 }
+fn default_window_transparency() -> u32 { 100 }
+fn default_ui_transparency() -> u32 { 100 }
 fn default_starfield_density() -> u32 { 50 }
 fn default_star_twinkle_speed() -> u32 { 50 }
 fn default_meteor_rate() -> u32 { 50 }
@@ -260,10 +260,10 @@ impl<'de> Deserialize<'de> for AppConfig {
         }
 
         if let Some(v) = get_value(&value, "appearance", &["window_transparency"]) {
-            cfg.window_transparency = as_u32(v, 0);
+            cfg.window_transparency = as_u32(v, 100);
         }
         if let Some(v) = get_value(&value, "appearance", &["ui_transparency"]) {
-            cfg.ui_transparency = as_u32(v, 0);
+            cfg.ui_transparency = as_u32(v, 100);
         }
         if let Some(v) = get_value(&value, "appearance", &["starfield_density"]) {
             cfg.starfield_density = as_u32(v, 50);
@@ -309,6 +309,43 @@ impl<'de> Deserialize<'de> for AppConfig {
 }
 
 impl AppConfig {
+    /// Flat representation used by the frontend. The on-disk config stays
+    /// grouped by category, but the UI expects the original flat field names.
+    pub fn to_flat_value(&self) -> Value {
+        json!({
+            "mode": self.mode,
+            "image_format": self.image_format,
+            "jpeg_quality": self.jpeg_quality,
+            "video_bitrate": self.video_bitrate,
+            "video_duration": self.video_duration,
+            "video_fps": self.video_fps,
+            "motion_duration": self.motion_duration,
+            "motion_fps": self.motion_fps,
+            "save_dir": self.save_dir,
+            "filename_prefix": self.filename_prefix,
+            "thumbnail_size": self.thumbnail_size,
+            "save_thumbnail": self.save_thumbnail,
+            "hotkey_image": self.hotkey_image,
+            "hotkey_video": self.hotkey_video,
+            "hotkey_motion": self.hotkey_motion,
+            "record_system_audio": self.record_system_audio,
+            "audio_bitrate": self.audio_bitrate,
+            "window_transparency": self.window_transparency,
+            "ui_transparency": self.ui_transparency,
+            "starfield_density": self.starfield_density,
+            "star_twinkle_speed": self.star_twinkle_speed,
+            "meteor_rate": self.meteor_rate,
+            "language": self.language,
+            "sound_enabled": self.sound_enabled,
+            "toast_duration": self.toast_duration,
+            "show_toast": self.show_toast,
+            "auto_open_folder": self.auto_open_folder,
+            "start_minimized": self.start_minimized,
+            "hide_on_capture": self.hide_on_capture,
+            "close_to_tray": self.close_to_tray,
+        })
+    }
+
     fn config_path() -> Option<PathBuf> {
         config_dir().map(|p| p.join("PixelSnap").join("config.json"))
     }

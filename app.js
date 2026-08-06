@@ -270,7 +270,7 @@ function startMeteors() {
     head.style.height = headSize + 'px';
     head.style.background = '#fff';
     head.style.boxShadow =
-      '0 0 10px 4px rgba(' + main + ',0.95), 0 0 24px 10px rgba(' + glow + ',0.45)';
+      '0 0 14px 6px rgba(' + main + ',1), 0 0 38px 16px rgba(' + glow + ',0.65)';
     m.appendChild(head);
 
     // Pick a start edge and direction so meteors sweep across the whole UI,
@@ -310,6 +310,7 @@ function startMeteors() {
       s.style.left = offX.toFixed(2) + 'px';
       s.style.top = offY.toFixed(2) + 'px';
       s.style.background = 'rgb(' + main + ')';
+      s.style.boxShadow = '0 0 5px 2px rgba(' + main + ',0.55)';
       s.style.opacity = Math.max(0.05, 0.8 - i * 0.11).toFixed(2);
       m.appendChild(s);
     }
@@ -329,6 +330,7 @@ function startMeteors() {
       const r = Math.random();
       p.style.background = r < 0.25 ? '#fff' : 'rgb(' + main + ')';
       if (r > 0.8) p.style.background = '#ffee78';
+      p.style.boxShadow = '0 0 6px 2px rgba(' + main + ',0.8)';
       const angle = burst
         ? Math.random() * Math.PI * 2
         : Math.atan2(distY, distX) + Math.PI + (Math.random() * 0.8 - 0.4);
@@ -364,7 +366,7 @@ function startMeteors() {
       const y = startY + distY * t;
       m.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)';
       if (light) {
-        const intensity = Math.sin(Math.PI * t) * 0.30;
+        const intensity = Math.sin(Math.PI * t) * 0.45;
         light.style.opacity = intensity.toFixed(3);
         light.style.background =
           'radial-gradient(circle 220px at ' + x.toFixed(0) + 'px ' + y.toFixed(0) + 'px, rgba(' + glow + ',0.55), rgba(' + main + ',0.16) 45%, transparent 72%)';
@@ -399,8 +401,8 @@ function startMeteors() {
 function applyAppearance() {
   const winT = clampInt($('#win-transparency').value, 0, 100);
   const uiT = clampInt($('#ui-transparency').value, 0, 100);
-  document.documentElement.style.setProperty('--win-alpha', (1 - winT / 100).toFixed(3));
-  document.documentElement.style.setProperty('--ui-opacity', (1 - uiT / 100).toFixed(3));
+  document.documentElement.style.setProperty('--win-alpha', (winT / 100).toFixed(3));
+  document.documentElement.style.setProperty('--ui-opacity', (uiT / 100).toFixed(3));
   buildStarfield();
   startMeteors();
 }
@@ -719,8 +721,8 @@ function applyConfig(cfg) {
   $('#save-thumbnail').checked = !!cfg.save_thumbnail;
   $('#record-audio').checked = cfg.record_system_audio !== false;
   $('#close-to-tray').checked = cfg.close_to_tray !== false;
-  $('#win-transparency').value = cfg.window_transparency ?? 0;
-  $('#ui-transparency').value = cfg.ui_transparency ?? 0;
+  $('#win-transparency').value = cfg.window_transparency ?? 100;
+  $('#ui-transparency').value = cfg.ui_transparency ?? 100;
   $('#star-density').value = cfg.starfield_density ?? 50;
   $('#star-twinkle').value = cfg.star_twinkle_speed ?? 50;
   $('#meteor-rate').value = cfg.meteor_rate ?? 50;

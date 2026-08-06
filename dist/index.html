@@ -91,10 +91,11 @@ body {
 .star {
   position: absolute; background: #fff;
   animation: twinkle var(--twinkle-dur, 1.2s) steps(2) infinite;
+  box-shadow: 0 0 4px 1px currentColor;
 }
 .star.s1 { width: 1px; height: 1px; }
 .star.s2 { width: 2px; height: 2px; }
-.star.s3 { width: 3px; height: 3px; box-shadow: 0 0 4px 1px currentColor; }
+.star.s3 { width: 3px; height: 3px; box-shadow: 0 0 8px 3px currentColor; }
 .star.mint { background: var(--accent-mint); color: var(--accent-mint); }
 .star.pink { background: var(--accent-pink); color: var(--accent-pink); }
 .star.yellow { background: var(--accent-yellow); color: var(--accent-yellow); }
@@ -642,13 +643,13 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
     <label class="pixel-label" data-i18n="appearance">▸ APPEARANCE</label>
     <div class="set-row">
       <span class="set-label" data-i18n="windowTransparency">WINDOW TRANSPARENCY</span>
-      <input type="range" id="win-transparency" min="0" max="100" step="5" value="0">
-      <span class="set-val" id="win-transparency-label">0%</span>
+      <input type="range" id="win-transparency" min="0" max="100" step="5" value="100">
+      <span class="set-val" id="win-transparency-label">100%</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="uiTransparency">UI TRANSPARENCY</span>
-      <input type="range" id="ui-transparency" min="0" max="100" step="5" value="0">
-      <span class="set-val" id="ui-transparency-label">0%</span>
+      <input type="range" id="ui-transparency" min="0" max="100" step="5" value="100">
+      <span class="set-val" id="ui-transparency-label">100%</span>
     </div>
     <div class="set-row">
       <span class="set-label" data-i18n="starfieldDensity">STARFIELD DENSITY</span>

@@ -22,9 +22,9 @@ struct AppState {
 }
 
 #[tauri::command]
-fn load_config(state: tauri::State<AppState>) -> Result<AppConfig, String> {
+fn load_config(state: tauri::State<AppState>) -> Result<serde_json::Value, String> {
     let cfg = state.config.lock().map_err(|e| e.to_string())?;
-    Ok(cfg.clone())
+    Ok(cfg.to_flat_value())
 }
 
 #[tauri::command]
@@ -103,7 +103,7 @@ fn merge_and_validate_config(
 }
 
 #[tauri::command]
-fn reset_config(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<AppConfig, String> {
+fn reset_config(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<serde_json::Value, String> {
     let cfg = AppConfig::reset().map_err(|e| e.to_string())?;
     {
         let mut state_cfg = state.config.lock().map_err(|e| e.to_string())?;
@@ -111,7 +111,7 @@ fn reset_config(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<
     }
     let _ = app.global_shortcut().unregister_all();
     register_all_shortcuts(&app);
-    Ok(cfg)
+    Ok(cfg.to_flat_value())
 }
 
 fn do_take_screenshot(app: &tauri::AppHandle, mode: Option<String>, hide_window: bool) -> Result<String, String> {
@@ -707,8 +707,8 @@ mod tests {
         assert_eq!(merged.meteor_rate, 70);
 
         let fresh = merge_and_validate_config(&current, serde_json::json!({})).unwrap();
-        assert_eq!(fresh.window_transparency, 0);
-        assert_eq!(fresh.ui_transparency, 0);
+        assert_eq!(fresh.window_transparency, 100);
+        assert_eq!(fresh.ui_transparency, 100);
         assert_eq!(fresh.starfield_density, 50);
         assert_eq!(fresh.star_twinkle_speed, 50);
         assert_eq!(fresh.meteor_rate, 50);
