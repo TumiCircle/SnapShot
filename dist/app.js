@@ -270,7 +270,7 @@ function startMeteors() {
     head.style.height = headSize + 'px';
     head.style.background = '#fff';
     head.style.boxShadow =
-      '0 0 14px 6px rgba(' + main + ',1), 0 0 38px 16px rgba(' + glow + ',0.65)';
+      '0 0 20px 8px rgba(' + main + ',1), 0 0 52px 22px rgba(' + glow + ',0.85)';
     m.appendChild(head);
 
     // Pick a start edge and direction so meteors sweep across the whole UI,
@@ -310,7 +310,7 @@ function startMeteors() {
       s.style.left = offX.toFixed(2) + 'px';
       s.style.top = offY.toFixed(2) + 'px';
       s.style.background = 'rgb(' + main + ')';
-      s.style.boxShadow = '0 0 5px 2px rgba(' + main + ',0.55)';
+      s.style.boxShadow = '0 0 8px 3px rgba(' + main + ',0.75)';
       s.style.opacity = Math.max(0.05, 0.8 - i * 0.11).toFixed(2);
       m.appendChild(s);
     }
@@ -330,7 +330,7 @@ function startMeteors() {
       const r = Math.random();
       p.style.background = r < 0.25 ? '#fff' : 'rgb(' + main + ')';
       if (r > 0.8) p.style.background = '#ffee78';
-      p.style.boxShadow = '0 0 6px 2px rgba(' + main + ',0.8)';
+      p.style.boxShadow = '0 0 10px 4px rgba(' + main + ',0.9)';
       const angle = burst
         ? Math.random() * Math.PI * 2
         : Math.atan2(distY, distX) + Math.PI + (Math.random() * 0.8 - 0.4);
@@ -366,10 +366,10 @@ function startMeteors() {
       const y = startY + distY * t;
       m.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)';
       if (light) {
-        const intensity = Math.sin(Math.PI * t) * 0.45;
+        const intensity = Math.sin(Math.PI * t) * 0.65;
         light.style.opacity = intensity.toFixed(3);
         light.style.background =
-          'radial-gradient(circle 220px at ' + x.toFixed(0) + 'px ' + y.toFixed(0) + 'px, rgba(' + glow + ',0.55), rgba(' + main + ',0.16) 45%, transparent 72%)';
+          'radial-gradient(circle 260px at ' + x.toFixed(0) + 'px ' + y.toFixed(0) + 'px, rgba(' + glow + ',0.75), rgba(' + main + ',0.28) 45%, transparent 72%)';
       }
       // Quick fade in, slow fade out near the end.
       m.style.opacity = t < 0.05 ? String(t / 0.05) : t > 0.85 ? String(Math.max(0, (1 - t) / 0.15)) : '1';
