@@ -62,7 +62,7 @@ fn default_audio_bitrate() -> u32 { 192_000 }
 fn default_window_transparency() -> u32 { 100 }
 fn default_ui_transparency() -> u32 { 100 }
 fn default_starfield_density() -> u32 { 50 }
-fn default_star_twinkle_speed() -> u32 { 50 }
+fn default_star_twinkle_speed() -> u32 { 45 }
 fn default_meteor_rate() -> u32 { 50 }
 fn default_language() -> String { "en".to_string() }
 fn default_hotkey_image() -> String { "CommandOrControl+Shift+S".to_string() }

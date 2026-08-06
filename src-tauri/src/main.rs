@@ -710,7 +710,7 @@ mod tests {
         assert_eq!(fresh.window_transparency, 100);
         assert_eq!(fresh.ui_transparency, 100);
         assert_eq!(fresh.starfield_density, 50);
-        assert_eq!(fresh.star_twinkle_speed, 50);
+        assert_eq!(fresh.star_twinkle_speed, 45);
         assert_eq!(fresh.meteor_rate, 50);
     }
 

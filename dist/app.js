@@ -203,7 +203,7 @@ function buildStarfield() {
     s.style.left = Math.random() * 100 + '%';
     s.style.top = Math.random() * 100 + '%';
     if (twinkle > 0) {
-      const dur = Math.max(0.4, 1.8 - twinkle / 100).toFixed(2);
+      const dur = Math.max(0.4, 2.0 - twinkle / 100).toFixed(2);
       s.style.setProperty('--twinkle-dur', dur + 's');
       // Negative delays start each star at a random phase so they never blink
       // in sync.
@@ -298,7 +298,7 @@ function startMeteors() {
       distX = -window.innerWidth * (0.7 + Math.random() * 0.3);
       distY = window.innerHeight * (0.2 + Math.random() * 0.6);
     }
-    const duration = 1500 + Math.random() * 600;
+    const duration = 1700 + Math.random() * 600;
     const trailLen = 7;
     for (let i = 1; i <= trailLen; i++) {
       const s = document.createElement('div');
@@ -736,7 +736,7 @@ function applyConfig(cfg) {
   $('#win-transparency').value = cfg.window_transparency ?? 100;
   $('#ui-transparency').value = cfg.ui_transparency ?? 100;
   $('#star-density').value = cfg.starfield_density ?? 50;
-  $('#star-twinkle').value = cfg.star_twinkle_speed ?? 50;
+  $('#star-twinkle').value = cfg.star_twinkle_speed ?? 45;
   $('#meteor-rate').value = cfg.meteor_rate ?? 50;
   updateAppearanceLabels();
   const lang = cfg.language === 'zh' ? 'zh' : 'en';
